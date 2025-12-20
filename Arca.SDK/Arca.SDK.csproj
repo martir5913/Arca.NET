@@ -10,9 +10,9 @@
     <!-- Información del paquete NuGet -->
     <PackageId>Arca.SDK</PackageId>
     <Version>1.0.0</Version>
-    <Authors>Fernando Martir</Authors>
-    <Company>Arca</Company>
-    <Description>SDK para acceder a credenciales almacenadas en Arca Vault de forma segura y ultra-rápida. Proporciona comunicación via Named Pipes con latencia menor a 1ms.</Description>
+    <Authors>Martir_Dev</Authors>
+    <Company>Develop Martir</Company>
+    <Description>SDK para acceder a credenciales almacenadas en Arca Vault de forma segura y rápida. Proporciona comunicación via Named Pipes con latencia menor a 1ms.</Description>
     <PackageTags>vault;secrets;credentials;security;named-pipes;grpc</PackageTags>
     <PackageProjectUrl>https://github.com/martir5913/Arca.NET</PackageProjectUrl>
     <RepositoryUrl>https://github.com/martir5913/Arca.NET</RepositoryUrl>
@@ -28,6 +28,7 @@
     <!-- Documentación XML -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <Title>Arca.SDK</Title>
   </PropertyGroup>
 
   <ItemGroup>

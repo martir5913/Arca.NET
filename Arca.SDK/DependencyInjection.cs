@@ -3,14 +3,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Arca.SDK;
 
-/// <summary>
-/// Extensiones para configurar Arca SDK en aplicaciones .NET.
-/// </summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// Agrega el cliente Arca gRPC al contenedor de servicios (recomendado para mejor rendimiento).
-    /// </summary>
+    // Agrega el cliente Arca gRPC al contenedor de servicios
     public static IServiceCollection AddArcaClient(
         this IServiceCollection services,
         string? apiKey = null,
@@ -35,9 +30,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>
-    /// Agrega el cliente Arca con configuración personalizada.
-    /// </summary>
+    // Agrega el cliente Arca con configuración personalizada.
     public static IServiceCollection AddArcaClient(
         this IServiceCollection services,
         Action<ArcaClientOptions> configure)
@@ -45,7 +38,7 @@ public static class DependencyInjection
         var options = new ArcaClientOptions();
         configure(options);
 
-        services.AddSingleton<IArcaClient>(_ => options.UseSimpleClient 
+        services.AddSingleton<IArcaClient>(_ => options.UseSimpleClient
             ? new ArcaSimpleClient(options.ApiKey, options.Timeout)
             : new ArcaClient(options.Timeout));
 
@@ -53,23 +46,10 @@ public static class DependencyInjection
     }
 }
 
-/// <summary>
-/// Opciones de configuración para el cliente Arca.
-/// </summary>
+// Opciones de configuración para el cliente Arca.
 public class ArcaClientOptions
 {
-    /// <summary>
-    /// Timeout para operaciones (default: 5 segundos).
-    /// </summary>
     public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(5);
-
-    /// <summary>
-    /// Usar cliente simple en lugar de gRPC (default: false).
-    /// </summary>
     public bool UseSimpleClient { get; set; }
-
-    /// <summary>
-    /// API Key para autenticación. Obtener desde la UI de Arca.
-    /// </summary>
     public string? ApiKey { get; set; }
 }

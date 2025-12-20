@@ -5,9 +5,6 @@ using Application = System.Windows.Application;
 
 namespace Arca.NET;
 
-/// <summary>
-/// Interaction logic for App.xaml
-/// </summary>
 public partial class App : Application
 {
     private TrayIconService? _trayIcon;
@@ -39,9 +36,6 @@ public partial class App : Application
         base.OnExit(e);
     }
 
-    /// <summary>
-    /// Muestra la ventana de login.
-    /// </summary>
     public void ShowLoginWindow()
     {
         // Cerrar MainWindow si está abierta
@@ -60,10 +54,6 @@ public partial class App : Application
         _trayIcon?.UpdateStatus(false, 0);
     }
 
-    /// <summary>
-    /// Muestra la ventana principal después de desbloquear.
-    /// </summary>
-    /// <param name="minimizeToTray">Si es true, minimiza a la bandeja después de crear la ventana</param>
     public void ShowMainWindow(
         byte[] derivedKey,
         Arca.Core.Interfaces.IVaultRepository vaultRepository,
@@ -100,19 +90,12 @@ public partial class App : Application
         }
     }
 
-    /// <summary>
-    /// Actualiza el conteo de secretos.
-    /// </summary>
     public void UpdateSecretCount(int count)
     {
         SecretCount = count;
         _trayIcon?.UpdateStatus(IsVaultUnlocked, count);
     }
 
-    /// <summary>
-    /// Minimiza la aplicación a la bandeja del sistema.
-    /// </summary>
-    /// <param name="showNotification">Si es true, muestra notificación al usuario</param>
     public void MinimizeToTray(bool showNotification = true)
     {
         _mainWindow?.Hide();

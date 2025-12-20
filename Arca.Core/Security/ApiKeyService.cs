@@ -3,9 +3,6 @@ using System.Text;
 
 namespace Arca.Core.Security;
 
-/// <summary>
-/// Servicio para generar y validar API Keys.
-/// </summary>
 public static class ApiKeyService
 {
     private const string Prefix = "arca_";
@@ -20,19 +17,19 @@ public static class ApiKeyService
         // Generar bytes aleatorios
         var keyBytes = new byte[KeyLength];
         RandomNumberGenerator.Fill(keyBytes);
-        
+
         // Convertir a Base64 URL-safe
         var keyBase64 = Convert.ToBase64String(keyBytes)
             .Replace("+", "-")
             .Replace("/", "_")
             .TrimEnd('=');
-        
+
         // Agregar prefijo para identificar fácilmente
         var apiKey = $"{Prefix}{keyBase64}";
-        
+
         // Calcular hash para almacenamiento
         var keyHash = ComputeHash(apiKey);
-        
+
         return (apiKey, keyHash);
     }
 

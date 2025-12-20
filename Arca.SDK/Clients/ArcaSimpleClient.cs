@@ -1,7 +1,7 @@
+using Arca.Core.Common;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Text;
-using Arca.Core.Common;
 
 namespace Arca.SDK.Clients;
 
@@ -53,9 +53,6 @@ public sealed class ArcaSimpleClient : IArcaClient
         }
     }
 
-    /// <summary>
-    /// Verifica si la API Key configurada es válida.
-    /// </summary>
     public async Task<bool> AuthenticateAsync(CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(_apiKey))
@@ -78,10 +75,10 @@ public sealed class ArcaSimpleClient : IArcaClient
 
         try
         {
-            var command = string.IsNullOrEmpty(_apiKey) 
-                ? $"GET|{key}" 
+            var command = string.IsNullOrEmpty(_apiKey)
+                ? $"GET|{key}"
                 : $"GET|{_apiKey}|{key}";
-                
+
             var response = await SendCommandAsync(command, cancellationToken);
             var parts = response.Split('|');
 
@@ -103,7 +100,7 @@ public sealed class ArcaSimpleClient : IArcaClient
     public async Task<string> GetSecretValueAsync(string key, CancellationToken cancellationToken = default)
     {
         var result = await GetSecretAsync(key, cancellationToken);
-        
+
         if (!result.Success)
             throw new ArcaSecretNotFoundException(key, result.Error);
 
@@ -139,7 +136,7 @@ public sealed class ArcaSimpleClient : IArcaClient
             {
                 command = string.IsNullOrWhiteSpace(filter) ? $"LIST|{_apiKey}" : $"LIST|{_apiKey}|{filter}";
             }
-            
+
             var response = await SendCommandAsync(command, cancellationToken);
             var parts = response.Split('|');
 
@@ -175,7 +172,7 @@ public sealed class ArcaSimpleClient : IArcaClient
             var command = string.IsNullOrEmpty(_apiKey)
                 ? $"EXISTS|{key}"
                 : $"EXISTS|{_apiKey}|{key}";
-                
+
             var response = await SendCommandAsync(command, cancellationToken);
             return response == "TRUE";
         }
@@ -191,7 +188,7 @@ public sealed class ArcaSimpleClient : IArcaClient
         try
         {
             var status = await GetStatusAsync(cancellationToken);
-            
+
             if (!status.IsUnlocked)
                 return false;
 
@@ -203,7 +200,7 @@ public sealed class ArcaSimpleClient : IArcaClient
                     Debug.WriteLine("[ArcaSimpleClient] Server requires authentication but no API Key provided");
                     return false;
                 }
-                
+
                 return await AuthenticateAsync(cancellationToken);
             }
 
@@ -239,7 +236,7 @@ public sealed class ArcaSimpleClient : IArcaClient
             // Leer respuesta
             var buffer = new byte[4096];
             var bytesRead = await pipeClient.ReadAsync(buffer, 0, buffer.Length, cts.Token);
-            
+
             return Encoding.UTF8.GetString(buffer, 0, bytesRead).TrimEnd('\r', '\n');
         }
         catch (TimeoutException)

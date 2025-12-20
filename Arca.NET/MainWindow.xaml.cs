@@ -506,4 +506,38 @@ public partial class MainWindow : Window
     }
 
     #endregion
+
+    #region Audit Log
+
+    private void AuditLogButton_Click(object sender, RoutedEventArgs e)
+    {
+        RefreshAuditLog();
+        pnlAuditLog.Visibility = Visibility.Visible;
+    }
+
+    private void RefreshAuditLog()
+    {
+        // Obtener estadísticas
+        var stats = _secretServer.AuditService.GetStatistics();
+        txtTotalRequests.Text = stats.TotalRequests.ToString();
+        txtSuccessRequests.Text = stats.SuccessfulRequests.ToString();
+        txtFailedRequests.Text = stats.FailedRequests.ToString();
+        txtUniqueClients.Text = stats.UniqueApiKeys.ToString();
+
+        // Obtener logs recientes
+        var logs = _secretServer.AuditService.GetRecentLogs(200);
+        lstAuditLogs.ItemsSource = logs;
+    }
+
+    private void RefreshAuditLogButton_Click(object sender, RoutedEventArgs e)
+    {
+        RefreshAuditLog();
+    }
+
+    private void CloseAuditLogButton_Click(object sender, RoutedEventArgs e)
+    {
+        pnlAuditLog.Visibility = Visibility.Collapsed;
+    }
+
+    #endregion
 }

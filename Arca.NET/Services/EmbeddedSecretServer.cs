@@ -1,11 +1,11 @@
-using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.IO;
-using System.IO.Pipes;
-using System.Text;
 using Arca.Core.Common;
 using Arca.Core.Entities;
 using Arca.Core.Security;
+using Arca.Core.Services;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.IO.Pipes;
+using System.Text;
 
 namespace Arca.NET.Services;
 
@@ -14,11 +14,13 @@ namespace Arca.NET.Services;
 /// directamente desde la UI cuando el Daemon no está disponible.
 /// Usa Named Pipes para comunicación ultra-rápida.
 /// Requiere autenticación via API Key.
+/// Incluye sistema de auditoría completo.
 /// </summary>
 public sealed class EmbeddedSecretServer : IDisposable
 {
     private readonly ConcurrentDictionary<string, SecretEntry> _secrets = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, ApiKeyEntry> _apiKeys = new(); // KeyHash -> ApiKeyEntry
+    private readonly AuditService _auditService;
     private CancellationTokenSource? _cts;
     private Task? _serverTask;
     private bool _disposed;
@@ -33,9 +35,12 @@ public sealed class EmbeddedSecretServer : IDisposable
 
     public bool IsRunning => _isRunning;
 
+    public AuditService AuditService => _auditService;
+
     public EmbeddedSecretServer()
     {
         _pipeName = $"{ArcaConstants.PipeName}-simple";
+        _auditService = new AuditService();
     }
 
     /// <summary>
@@ -65,18 +70,23 @@ public sealed class EmbeddedSecretServer : IDisposable
     }
 
     /// <summary>
-    /// Verifica si una API Key es válida.
+    /// Verifica si una API Key es válida y retorna su información.
     /// </summary>
-    public bool ValidateApiKey(string apiKey)
+    private (bool IsValid, ApiKeyEntry? Entry) ValidateApiKeyWithInfo(string apiKey)
     {
         if (!RequireAuthentication)
-            return true;
+            return (true, null);
 
         if (string.IsNullOrWhiteSpace(apiKey))
-            return false;
+            return (false, null);
 
         var keyHash = ApiKeyService.ComputeHash(apiKey);
-        return _apiKeys.ContainsKey(keyHash);
+        if (_apiKeys.TryGetValue(keyHash, out var entry))
+        {
+            return (true, entry);
+        }
+
+        return (false, null);
     }
 
     /// <summary>
@@ -84,9 +94,6 @@ public sealed class EmbeddedSecretServer : IDisposable
     /// </summary>
     public event EventHandler<string>? ApiKeyUsed;
 
-    /// <summary>
-    /// Inicia el servidor de secretos.
-    /// </summary>
     public void Start()
     {
         if (_isRunning) return;
@@ -94,23 +101,20 @@ public sealed class EmbeddedSecretServer : IDisposable
         _cts = new CancellationTokenSource();
         _isRunning = true;
         _serverTask = Task.Run(() => RunServerLoopAsync(_cts.Token));
-        
+
         Debug.WriteLine($"[EmbeddedSecretServer] Server started on pipe: {_pipeName}");
         Debug.WriteLine($"[EmbeddedSecretServer] Authentication required: {RequireAuthentication}");
     }
 
-    /// <summary>
-    /// Detiene el servidor de secretos.
-    /// </summary>
     public void Stop()
     {
         if (!_isRunning) return;
 
         Debug.WriteLine("[EmbeddedSecretServer] Stopping server...");
-        
+
         _isRunning = false;
         _cts?.Cancel();
-        
+
         try
         {
             // Crear una conexión dummy para desbloquear WaitForConnectionAsync
@@ -124,18 +128,18 @@ public sealed class EmbeddedSecretServer : IDisposable
             _serverTask?.Wait(TimeSpan.FromSeconds(2));
         }
         catch { }
-        
+
         Debug.WriteLine("[EmbeddedSecretServer] Server stopped");
     }
 
     private async Task RunServerLoopAsync(CancellationToken cancellationToken)
     {
         Debug.WriteLine($"[EmbeddedSecretServer] Server loop started, listening on: {_pipeName}");
-        
+
         while (_isRunning && !cancellationToken.IsCancellationRequested)
         {
             NamedPipeServerStream? pipeServer = null;
-            
+
             try
             {
                 pipeServer = new NamedPipeServerStream(
@@ -146,7 +150,7 @@ public sealed class EmbeddedSecretServer : IDisposable
                     PipeOptions.Asynchronous);
 
                 await pipeServer.WaitForConnectionAsync(cancellationToken);
-                
+
                 if (!_isRunning || cancellationToken.IsCancellationRequested)
                 {
                     pipeServer.Dispose();
@@ -181,7 +185,7 @@ public sealed class EmbeddedSecretServer : IDisposable
                 catch { }
             }
         }
-        
+
         Debug.WriteLine("[EmbeddedSecretServer] Server loop ended");
     }
 
@@ -192,7 +196,7 @@ public sealed class EmbeddedSecretServer : IDisposable
             // Leer request
             var buffer = new byte[4096];
             var bytesRead = await pipeServer.ReadAsync(buffer, 0, buffer.Length);
-            
+
             if (bytesRead == 0)
             {
                 return;
@@ -223,13 +227,17 @@ public sealed class EmbeddedSecretServer : IDisposable
                 if (parts.Length < 2)
                 {
                     response = "ERROR|API Key required. Use: COMMAND|API_KEY|PARAMS";
+                    LogAudit("Unknown", "", command, null, false, "API Key not provided");
                 }
                 else
                 {
                     var apiKey = parts[1];
-                    if (!ValidateApiKey(apiKey))
+                    var (isValid, keyEntry) = ValidateApiKeyWithInfo(apiKey);
+
+                    if (!isValid)
                     {
                         response = "ERROR|Invalid or expired API Key";
+                        LogAudit("Invalid", "", command, parts.Length > 2 ? parts[2] : null, false, "Invalid API Key");
                         Debug.WriteLine("[EmbeddedSecretServer] Unauthorized access attempt");
                     }
                     else
@@ -237,9 +245,9 @@ public sealed class EmbeddedSecretServer : IDisposable
                         // Notificar uso de API Key
                         var keyHash = ApiKeyService.ComputeHash(apiKey);
                         ApiKeyUsed?.Invoke(this, keyHash);
-                        
+
                         // Procesar comando autenticado
-                        response = ProcessAuthenticatedCommand(command, parts);
+                        response = ProcessAuthenticatedCommand(command, parts, keyEntry!);
                     }
                 }
             }
@@ -262,30 +270,81 @@ public sealed class EmbeddedSecretServer : IDisposable
         }
     }
 
-    private string ProcessAuthenticatedCommand(string command, string[] parts)
+    private string ProcessAuthenticatedCommand(string command, string[] parts, ApiKeyEntry keyEntry)
     {
         // Formato: COMANDO|API_KEY|PARAM1|PARAM2...
-        return command switch
+        var secretKey = parts.Length > 2 ? parts[2] : null;
+        string response;
+        bool success;
+
+        switch (command)
         {
-            "GET" when parts.Length >= 3 => HandleGet(parts[2]),
-            "EXISTS" when parts.Length >= 3 => HandleExists(parts[2]),
-            "LIST" => HandleList(parts.Length > 2 ? parts[2] : null),
-            "KEYS" => HandleList(parts.Length > 2 ? parts[2] : null),
-            _ => "ERROR|Unknown command"
-        };
+            case "GET" when parts.Length >= 3:
+                response = HandleGet(parts[2]);
+                success = response.StartsWith("OK");
+                LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "GET", parts[2], success,
+                    success ? null : response.Replace("NOTFOUND", "Secret not found"));
+                break;
+
+            case "EXISTS" when parts.Length >= 3:
+                response = HandleExists(parts[2]);
+                success = true;
+                LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "EXISTS", parts[2], true, null);
+                break;
+
+            case "LIST":
+                response = HandleList(parts.Length > 2 ? parts[2] : null);
+                LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "LIST", null, true, null);
+                break;
+
+            case "KEYS":
+                response = HandleList(parts.Length > 2 ? parts[2] : null);
+                LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "LIST", null, true, null);
+                break;
+
+            default:
+                response = "ERROR|Unknown command";
+                LogAudit(keyEntry.Name, keyEntry.Id.ToString(), command, secretKey, false, "Unknown command");
+                break;
+        }
+
+        return response;
     }
 
     private string ProcessUnauthenticatedCommand(string command, string[] parts)
     {
         // Formato sin auth: COMANDO|PARAM1|PARAM2...
-        return command switch
+        var secretKey = parts.Length > 1 ? parts[1] : null;
+
+        switch (command)
         {
-            "GET" when parts.Length >= 2 => HandleGet(parts[1]),
-            "EXISTS" when parts.Length >= 2 => HandleExists(parts[1]),
-            "LIST" => HandleList(parts.Length > 1 ? parts[1] : null),
-            "KEYS" => HandleList(parts.Length > 1 ? parts[1] : null),
-            _ => "ERROR|Unknown command"
-        };
+            case "GET" when parts.Length >= 2:
+                var getResponse = HandleGet(parts[1]);
+                LogAudit("Anonymous", "N/A", "GET", parts[1], getResponse.StartsWith("OK"), null);
+                return getResponse;
+
+            case "EXISTS" when parts.Length >= 2:
+                var existsResponse = HandleExists(parts[1]);
+                LogAudit("Anonymous", "N/A", "EXISTS", parts[1], true, null);
+                return existsResponse;
+
+            case "LIST":
+                LogAudit("Anonymous", "N/A", "LIST", null, true, null);
+                return HandleList(parts.Length > 1 ? parts[1] : null);
+
+            case "KEYS":
+                LogAudit("Anonymous", "N/A", "LIST", null, true, null);
+                return HandleList(parts.Length > 1 ? parts[1] : null);
+
+            default:
+                LogAudit("Anonymous", "N/A", command, secretKey, false, "Unknown command");
+                return "ERROR|Unknown command";
+        }
+    }
+
+    private void LogAudit(string apiKeyName, string apiKeyId, string action, string? secretKey, bool success, string? error)
+    {
+        _auditService.Log(apiKeyName, apiKeyId, action, secretKey, success, error);
     }
 
     private string HandleStatus()
@@ -296,10 +355,15 @@ public sealed class EmbeddedSecretServer : IDisposable
 
     private string HandleAuth(string apiKey)
     {
-        if (ValidateApiKey(apiKey))
+        var (isValid, keyEntry) = ValidateApiKeyWithInfo(apiKey);
+
+        if (isValid)
         {
+            LogAudit(keyEntry?.Name ?? "Unknown", keyEntry?.Id.ToString() ?? "", "AUTH", null, true, null);
             return "OK|AUTHENTICATED";
         }
+
+        LogAudit("Invalid", "", "AUTH", null, false, "Invalid API Key");
         return "ERROR|Invalid API Key";
     }
 
@@ -332,5 +396,6 @@ public sealed class EmbeddedSecretServer : IDisposable
         _disposed = true;
         Stop();
         _cts?.Dispose();
+        _auditService.Dispose();
     }
 }

@@ -1,8 +1,5 @@
 namespace Arca.Core.Entities;
 
-/// <summary>
-/// Representa una API Key autorizada para acceder a los secretos.
-/// </summary>
 public sealed record ApiKeyEntry(
     Guid Id,
     string Name,

@@ -1,8 +1,5 @@
 namespace Arca.SDK;
 
-/// <summary>
-/// Resultado de una operación de obtención de secreto.
-/// </summary>
 public sealed class SecretResult
 {
     public bool Success { get; init; }
@@ -20,15 +17,12 @@ public sealed class SecretResult
         => new() { Success = false, Error = error };
 }
 
-/// <summary>
-/// Estado del vault.
-/// </summary>
 public sealed class VaultStatus
 {
     public bool IsUnlocked { get; init; }
     public string? VaultPath { get; init; }
     public int SecretCount { get; init; }
-    
+
     /// <summary>
     /// Indica si el servidor requiere autenticación via API Key.
     /// </summary>

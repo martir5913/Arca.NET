@@ -45,25 +45,16 @@ public sealed class TrayIconService : IDisposable
         _notifyIcon.DoubleClick += OnNotifyIconDoubleClick;
     }
 
-    /// <summary>
-    /// Muestra el icono en la bandeja del sistema.
-    /// </summary>
     public void Show()
     {
         _notifyIcon.Visible = true;
     }
 
-    /// <summary>
-    /// Oculta el icono de la bandeja del sistema.
-    /// </summary>
     public void Hide()
     {
         _notifyIcon.Visible = false;
     }
 
-    /// <summary>
-    /// Actualiza el estado mostrado en el icono.
-    /// </summary>
     public void UpdateStatus(bool isUnlocked, int secretCount)
     {
         var status = isUnlocked ? "Desbloqueado" : "Bloqueado";
@@ -76,9 +67,6 @@ public sealed class TrayIconService : IDisposable
         }
     }
 
-    /// <summary>
-    /// Muestra una notificación en la bandeja.
-    /// </summary>
     public void ShowNotification(string title, string message, ToolTipIcon icon = ToolTipIcon.Info)
     {
         _notifyIcon.ShowBalloonTip(3000, title, message, icon);

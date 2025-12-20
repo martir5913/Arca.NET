@@ -9,16 +9,12 @@ public interface IVaultRepository
     Task<VaultMetadata?> LoadMetadataAsync();
     Task<IReadOnlyList<SecretEntry>> LoadSecretsAsync(byte[] derivedKey);
     Task SaveSecretsAsync(IEnumerable<SecretEntry> secrets, byte[] derivedKey);
-    
-    /// <summary>
-    /// Carga las API Keys del vault.
-    /// </summary>
+
+    // Carga las API Keys del vault.
     Task<IReadOnlyList<ApiKeyEntry>> LoadApiKeysAsync(byte[] derivedKey);
-    
-    /// <summary>
+
     /// Guarda las API Keys en el vault.
-    /// </summary>
     Task SaveApiKeysAsync(IEnumerable<ApiKeyEntry> apiKeys, byte[] derivedKey);
-    
+
     string GetVaultPath();
 }

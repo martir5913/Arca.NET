@@ -7,13 +7,6 @@ Console.WriteLine("║           Con Autenticación por API Key                 
 Console.WriteLine("╚══════════════════════════════════════════════════════════╝");
 Console.WriteLine();
 
-// ============================================
-// PASO 1: Obtener API Key
-// ============================================
-// La API Key se puede obtener de:
-// - Variable de entorno (recomendado)
-// - Archivo de configuración
-// - Solicitar al usuario
 
 var apiKey = Environment.GetEnvironmentVariable("ARCA_API_KEY");
 
