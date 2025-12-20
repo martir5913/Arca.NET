@@ -1,0 +1,228 @@
+﻿<Window x:Class="Arca.NET.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Arca - Vault Manager" 
+        Height="600" Width="900"
+        WindowStartupLocation="CenterScreen"
+        Background="#1a1a2e">
+    
+    <Window.Resources>
+        <Style x:Key="ModernTextBox" TargetType="TextBox">
+            <Setter Property="Background" Value="#16213e"/>
+            <Setter Property="Foreground" Value="#e8e8e8"/>
+            <Setter Property="BorderBrush" Value="#0f3460"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+        
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Background" Value="#e94560"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="15,10"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#ff6b6b"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        
+        <Style x:Key="IconButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#888"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#2a2a4e"/>
+                    <Setter Property="Foreground" Value="#e94560"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+    
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#16213e" Padding="20,15">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="🔐" FontSize="24" VerticalAlignment="Center"/>
+                    <TextBlock Text="ARCA" FontSize="24" FontWeight="Bold" Foreground="#e94560" 
+                               Margin="10,0,0,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Vault Manager" FontSize="14" Foreground="#666" 
+                               Margin="10,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+                
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="🔒 Lock" Style="{StaticResource IconButton}" 
+                            Click="LockButton_Click" ToolTip="Lock Vault"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        
+        <!-- Toolbar -->
+        <Border Grid.Row="1" Background="#0f3460" Padding="15,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <!-- Search -->
+                <TextBox x:Name="txtSearch" 
+                         Style="{StaticResource ModernTextBox}"
+                         Width="300"
+                         HorizontalAlignment="Left"
+                         TextChanged="SearchBox_TextChanged"/>
+                
+                <!-- Add Button -->
+                <Button Grid.Column="1" 
+                        Content="➕ Add Secret" 
+                        Style="{StaticResource PrimaryButton}"
+                        Click="AddSecretButton_Click"/>
+            </Grid>
+        </Border>
+        
+        <!-- Secrets List -->
+        <Border Grid.Row="2" Margin="15">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="lstSecrets">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#16213e" CornerRadius="6" Margin="0,0,0,10" Padding="15">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Key}" 
+                                                   FontSize="16" FontWeight="SemiBold" 
+                                                   Foreground="#e8e8e8"/>
+                                        <TextBlock Text="{Binding Description}" 
+                                                   FontSize="12" Foreground="#666"
+                                                   Margin="0,5,0,0"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                            <TextBlock Text="Value: " Foreground="#888" FontSize="12"/>
+                                            <TextBlock Text="••••••••••••" Foreground="#aaa" FontSize="12"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button Content="📋" Style="{StaticResource IconButton}" 
+                                                Click="CopyValueButton_Click" ToolTip="Copy"
+                                                Tag="{Binding Value}"/>
+                                        <Button Content="✏️" Style="{StaticResource IconButton}" 
+                                                Click="EditSecretButton_Click" ToolTip="Edit"
+                                                Tag="{Binding}"/>
+                                        <Button Content="🗑️" Style="{StaticResource IconButton}" 
+                                                Click="DeleteSecretButton_Click" ToolTip="Delete"
+                                                Tag="{Binding Id}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+        
+        <!-- Status Bar -->
+        <Border Grid.Row="3" Background="#0f3460" Padding="15,10">
+            <Grid>
+                <TextBlock x:Name="txtStatus" Text="🔓 Vault unlocked" Foreground="#4ecdc4" FontSize="12"/>
+                <TextBlock x:Name="txtSecretCount" Text="0 secrets" Foreground="#666" FontSize="12" 
+                           HorizontalAlignment="Right"/>
+            </Grid>
+        </Border>
+        
+        <!-- Add/Edit Secret Dialog -->
+        <Border x:Name="pnlDialog" 
+                Grid.RowSpan="4"
+                Background="#CC000000"
+                Visibility="Collapsed">
+            <Border Background="#1a1a2e" 
+                    CornerRadius="8"
+                    Width="450"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    Padding="25">
+                <StackPanel>
+                    <TextBlock x:Name="txtDialogTitle" 
+                               Text="Add New Secret" 
+                               FontSize="20" FontWeight="Bold"
+                               Foreground="#e94560"
+                               Margin="0,0,0,20"/>
+                    
+                    <TextBlock Text="Key (Name)" Foreground="#aaa" FontSize="12" Margin="0,0,0,5"/>
+                    <TextBox x:Name="txtSecretKey" Style="{StaticResource ModernTextBox}"/>
+                    
+                    <TextBlock Text="Value (Secret)" Foreground="#aaa" FontSize="12" Margin="0,15,0,5"/>
+                    <TextBox x:Name="txtSecretValue" Style="{StaticResource ModernTextBox}"/>
+                    
+                    <TextBlock Text="Description (Optional)" Foreground="#aaa" FontSize="12" Margin="0,15,0,5"/>
+                    <TextBox x:Name="txtSecretDescription" Style="{StaticResource ModernTextBox}"/>
+                    
+                    <TextBlock x:Name="txtDialogError" 
+                               Foreground="#ff6b6b" FontSize="12"
+                               Margin="0,15,0,0"
+                               Visibility="Collapsed"/>
+                    
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,25,0,0">
+                        <Button Content="Cancel" 
+                                Style="{StaticResource IconButton}"
+                                Padding="15,10"
+                                Click="CancelDialogButton_Click"/>
+                        <Button Content="💾 Save" 
+                                Style="{StaticResource PrimaryButton}"
+                                Margin="10,0,0,0"
+                                Click="SaveSecretButton_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
+    </Grid>
+</Window>

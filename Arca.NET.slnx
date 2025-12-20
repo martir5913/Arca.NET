@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="Arca.Application/Arca.Application.csproj" />
+  <Project Path="Arca.Core/Arca.Core.csproj" />
+  <Project Path="Arca.Daemon/Arca.Daemon.csproj" />
+  <Project Path="Arca.Infrastructure/Arca.Infrastructure.csproj" />
+  <Project Path="Arca.NET/Arca.NET.csproj" />
+  <Project Path="Arca.SDK/Arca.SDK.csproj" />
+</Solution>
