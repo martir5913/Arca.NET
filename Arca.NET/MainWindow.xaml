@@ -96,8 +96,10 @@
                 </StackPanel>
                 
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="➖" Style="{StaticResource IconButton}" 
+                            Click="MinimizeButton_Click" ToolTip="Minimize to tray"/>
                     <Button Content="🔒 Lock" Style="{StaticResource IconButton}" 
-                            Click="LockButton_Click" ToolTip="Lock Vault"/>
+                            Click="LockButton_Click" ToolTip="Lock Vault" Margin="5,0,0,0"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -108,6 +110,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 
                 <!-- Search -->
@@ -117,10 +120,19 @@
                          HorizontalAlignment="Left"
                          TextChanged="SearchBox_TextChanged"/>
                 
-                <!-- Add Button -->
+                <!-- API Keys Button -->
                 <Button Grid.Column="1" 
+                        Content="🔑 API Keys" 
+                        Style="{StaticResource IconButton}"
+                        Padding="15,10"
+                        Click="ApiKeysButton_Click"
+                        ToolTip="Manage API Keys for SDK access"/>
+                
+                <!-- Add Button -->
+                <Button Grid.Column="2" 
                         Content="➕ Add Secret" 
                         Style="{StaticResource PrimaryButton}"
+                        Margin="10,0,0,0"
                         Click="AddSecretButton_Click"/>
             </Grid>
         </Border>
@@ -222,6 +234,118 @@
                                 Click="SaveSecretButton_Click"/>
                     </StackPanel>
                 </StackPanel>
+            </Border>
+        </Border>
+        
+        <!-- API Keys Management Dialog -->
+        <Border x:Name="pnlApiKeys" 
+                Grid.RowSpan="4"
+                Background="#CC000000"
+                Visibility="Collapsed">
+            <Border Background="#1a1a2e" 
+                    CornerRadius="8"
+                    Width="600"
+                    MaxHeight="500"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    Padding="25">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Header -->
+                    <StackPanel Grid.Row="0" Margin="0,0,0,15">
+                        <TextBlock Text="🔑 API Keys" 
+                                   FontSize="20" FontWeight="Bold"
+                                   Foreground="#e94560"/>
+                        <TextBlock Text="Generate API Keys to allow external applications to access secrets via SDK." 
+                                   Foreground="#888" FontSize="12" Margin="0,5,0,0" TextWrapping="Wrap"/>
+                    </StackPanel>
+                    
+                    <!-- New Key Form -->
+                    <Border Grid.Row="1" Background="#16213e" CornerRadius="6" Padding="15" Margin="0,0,0,15">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="txtNewKeyName" 
+                                     Style="{StaticResource ModernTextBox}"
+                                     Tag="Enter a name for the new API Key (e.g., 'My Web API')"/>
+                            <Button Grid.Column="1" 
+                                    Content="➕ Generate Key" 
+                                    Style="{StaticResource PrimaryButton}"
+                                    Margin="10,0,0,0"
+                                    Click="GenerateApiKeyButton_Click"/>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- Keys List -->
+                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="lstApiKeys">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="#16213e" CornerRadius="6" Margin="0,0,0,8" Padding="12">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Name}" FontWeight="Bold" 
+                                                           Foreground="#e8e8e8" FontSize="14"/>
+                                                <TextBlock Foreground="#666" FontSize="11" Margin="0,3,0,0">
+                                                    <Run Text="Created: "/><Run Text="{Binding CreatedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"/>
+                                                    <Run Text=" | Last used: "/>
+                                                    <Run Text="{Binding LastUsedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm}', TargetNullValue='Never'}"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            
+                                            <Button Grid.Column="1" 
+                                                    Content="🗑️" 
+                                                    Style="{StaticResource IconButton}"
+                                                    Tag="{Binding Id}"
+                                                    Click="DeleteApiKeyButton_Click"
+                                                    ToolTip="Revoke this API Key"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    
+                    <!-- Generated Key Display -->
+                    <Border x:Name="pnlGeneratedKey" Grid.Row="2" 
+                            Background="#0f3460" CornerRadius="6" Padding="15"
+                            Visibility="Collapsed" VerticalAlignment="Top">
+                        <StackPanel>
+                            <TextBlock Text="⚠️ Copy this API Key now! It won't be shown again." 
+                                       Foreground="#ffaa00" FontWeight="Bold" FontSize="12"/>
+                            <TextBox x:Name="txtGeneratedKey" 
+                                     Style="{StaticResource ModernTextBox}"
+                                     IsReadOnly="True" 
+                                     Margin="0,10,0,0"
+                                     FontFamily="Consolas"/>
+                            <Button Content="📋 Copy to Clipboard" 
+                                    Style="{StaticResource PrimaryButton}"
+                                    Margin="0,10,0,0"
+                                    Click="CopyApiKeyButton_Click"/>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Footer -->
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
+                        <Button Content="Close" 
+                                Style="{StaticResource IconButton}"
+                                Padding="15,10"
+                                Click="CloseApiKeysButton_Click"/>
+                    </StackPanel>
+                </Grid>
             </Border>
         </Border>
     </Grid>

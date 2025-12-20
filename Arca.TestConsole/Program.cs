@@ -1,106 +1,177 @@
 ﻿using Arca.SDK;
 using Arca.SDK.Clients;
 
-Console.WriteLine("╔══════════════════════════════════════╗");
-Console.WriteLine("║     Arca SDK Test Console            ║");
-Console.WriteLine("╚══════════════════════════════════════╝");
+Console.WriteLine("╔══════════════════════════════════════════════════════════╗");
+Console.WriteLine("║           Arca SDK Test Console                          ║");
+Console.WriteLine("║           Con Autenticación por API Key                  ║");
+Console.WriteLine("╚══════════════════════════════════════════════════════════╝");
 Console.WriteLine();
 
-using var arca = new ArcaSimpleClient();
+// ============================================
+// PASO 1: Obtener API Key
+// ============================================
+// La API Key se puede obtener de:
+// - Variable de entorno (recomendado)
+// - Archivo de configuración
+// - Solicitar al usuario
 
-// Verificar disponibilidad
-Console.WriteLine("Verificando conexión con Arca...");
+var apiKey = Environment.GetEnvironmentVariable("ARCA_API_KEY");
 
-if (!await arca.IsAvailableAsync())
+if (string.IsNullOrEmpty(apiKey))
 {
+    Console.WriteLine("⚠️  No se encontró la variable de entorno ARCA_API_KEY");
     Console.WriteLine();
-    Console.WriteLine("❌ Arca no está disponible.");
-    Console.WriteLine("   Asegúrate de que Arca.NET esté corriendo y el vault desbloqueado.");
+    Console.WriteLine("Opciones:");
+    Console.WriteLine("  1. Configurar variable de entorno:");
+    Console.WriteLine("     $env:ARCA_API_KEY = \"arca_tu_api_key_aqui\"");
     Console.WriteLine();
-    Console.WriteLine("Presiona cualquier tecla para salir...");
+    Console.WriteLine("  2. Ingresar API Key manualmente ahora");
+    Console.WriteLine();
+    Console.Write("Ingresa tu API Key (o Enter para probar sin autenticación): ");
+    apiKey = Console.ReadLine();
+    Console.WriteLine();
+}
+
+// ============================================
+// PASO 2: Crear cliente con API Key
+// ============================================
+using var arca = new ArcaSimpleClient(apiKey: apiKey);
+
+Console.WriteLine("🔌 Conectando a Arca...");
+Console.WriteLine();
+
+// ============================================
+// PASO 3: Verificar estado del servidor
+// ============================================
+var status = await arca.GetStatusAsync();
+
+Console.WriteLine("📊 Estado del Servidor:");
+Console.WriteLine($"   Vault desbloqueado: {(status.IsUnlocked ? "✅ Sí" : "❌ No")}");
+Console.WriteLine($"   Secretos disponibles: {status.SecretCount}");
+Console.WriteLine($"   Requiere autenticación: {(status.RequiresAuthentication ? "🔐 Sí" : "⚠️ No")}");
+Console.WriteLine();
+
+if (!status.IsUnlocked)
+{
+    Console.WriteLine("❌ El vault no está desbloqueado.");
+    Console.WriteLine("   Abre Arca.NET e ingresa tu contraseña maestra.");
     Console.ReadKey();
     return;
 }
 
-Console.WriteLine("✅ Conectado a Arca!");
-Console.WriteLine();
-
-// Obtener estado
-var status = await arca.GetStatusAsync();
-Console.WriteLine($"📊 Vault: {status.SecretCount} secreto(s) disponibles");
-Console.WriteLine();
-
 // ============================================
-// FORMA 1: Obtener un secreto específico
+// PASO 4: Verificar autenticación
 // ============================================
-Console.WriteLine("━━━ FORMA 1: Obtener secreto específico ━━━");
+Console.WriteLine("🔐 Verificando autenticación...");
 
-try
+var isAvailable = await arca.IsAvailableAsync();
+
+if (!isAvailable)
 {
-    var devSecret = await arca.GetSecretValueAsync("dev");
-    Console.WriteLine($"✅ Secreto 'dev': {devSecret}");
+    if (status.RequiresAuthentication && string.IsNullOrEmpty(apiKey))
+    {
+        Console.WriteLine("❌ El servidor requiere API Key pero no se proporcionó ninguna.");
+        Console.WriteLine();
+        Console.WriteLine("Para generar una API Key:");
+        Console.WriteLine("  1. Abre Arca.NET");
+        Console.WriteLine("  2. Haz clic en '🔑 API Keys'");
+        Console.WriteLine("  3. Genera una nueva key");
+        Console.WriteLine("  4. Configura la variable de entorno ARCA_API_KEY");
+    }
+    else if (status.RequiresAuthentication)
+    {
+        Console.WriteLine("❌ API Key inválida o revocada.");
+        Console.WriteLine("   Verifica que la API Key sea correcta.");
+    }
+    else
+    {
+        Console.WriteLine("❌ No se pudo conectar a Arca.");
+    }
+    Console.ReadKey();
+    return;
 }
-catch (ArcaSecretNotFoundException)
-{
-    Console.WriteLine("❌ El secreto 'dev' no existe");
-}
 
+Console.WriteLine("✅ Autenticación exitosa!");
 Console.WriteLine();
 
 // ============================================
-// FORMA 2: Obtener con manejo de resultado
+// PASO 5: Listar secretos disponibles
 // ============================================
-Console.WriteLine("━━━ FORMA 2: Obtener con resultado ━━━");
+Console.WriteLine("━━━ Secretos Disponibles ━━━");
 
-var devResult = await arca.GetSecretAsync("dev");
-if (devResult.Success)
+var keys = await arca.ListKeysAsync();
+
+if (keys.Count == 0)
 {
-    Console.WriteLine($"✅ Valor: {devResult.Value}");
-    Console.WriteLine($"   Descripción: {devResult.Description ?? "(sin descripción)"}");
+    Console.WriteLine("   (No hay secretos guardados)");
 }
 else
 {
-    Console.WriteLine($"❌ Error: {devResult.Error}");
-}
-
-Console.WriteLine();
-
-// ============================================
-// FORMA 3: Listar todas las claves
-// ============================================
-Console.WriteLine("━━━ FORMA 3: Listar todas las claves ━━━");
-
-var allKeys = await arca.ListKeysAsync();
-Console.WriteLine($"Claves disponibles ({allKeys.Count}):");
-
-foreach (var key in allKeys)
-{
-    var secretValue = await arca.GetSecretAsync(key);
-    if (secretValue.Success)
+    foreach (var key in keys)
     {
-        Console.WriteLine($"  🔑 {key} = {secretValue.Value}");
+        Console.WriteLine($"   🔑 {key}");
     }
 }
 
 Console.WriteLine();
 
 // ============================================
-// FORMA 4: Obtener múltiples secretos
+// PASO 6: Obtener un secreto específico
 // ============================================
-Console.WriteLine("━━━ FORMA 4: Obtener múltiples secretos ━━━");
+Console.WriteLine("━━━ Obtener Secreto ━━━");
+Console.Write("Ingresa el nombre del secreto a obtener (o Enter para saltar): ");
+var secretName = Console.ReadLine();
 
-var keysToGet = new[] { "dev", "ConnectionStrings:SqlServer", "ApiKey" };
-var multipleSecrets = await arca.GetSecretsAsync(keysToGet);
-
-foreach (var kvp in multipleSecrets)
+if (!string.IsNullOrWhiteSpace(secretName))
 {
-    if (kvp.Value.Success)
-        Console.WriteLine($"  ✅ {kvp.Key} = {kvp.Value.Value}");
-    else
-        Console.WriteLine($"  ❌ {kvp.Key} = No encontrado");
+    try
+    {
+        // Método 1: GetSecretValueAsync (lanza excepción si no existe)
+        var secretValue = await arca.GetSecretValueAsync(secretName);
+        Console.WriteLine($"✅ Valor: {secretValue}");
+    }
+    catch (ArcaSecretNotFoundException)
+    {
+        Console.WriteLine($"❌ El secreto '{secretName}' no existe.");
+    }
+    catch (ArcaException ex)
+    {
+        Console.WriteLine($"❌ Error: {ex.Message}");
+    }
+
+    Console.WriteLine();
+
+    // Método 2: GetSecretAsync (retorna resultado con Success/Error)
+    var result = await arca.GetSecretAsync(secretName);
+    Console.WriteLine("Usando GetSecretAsync:");
+    Console.WriteLine($"   Success: {result.Success}");
+    Console.WriteLine($"   Value: {result.Value ?? "(null)"}");
+    Console.WriteLine($"   Description: {result.Description ?? "(sin descripción)"}");
+    Console.WriteLine($"   Error: {result.Error ?? "(ninguno)"}");
 }
 
 Console.WriteLine();
-Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+// ============================================
+// PASO 7: Ejemplo de uso real
+// ============================================
+Console.WriteLine("━━━ Ejemplo de Uso Real ━━━");
+Console.WriteLine();
+Console.WriteLine("// Código de ejemplo para tu aplicación:");
+Console.WriteLine();
+Console.WriteLine("```csharp");
+Console.WriteLine("// En Program.cs o Startup.cs");
+Console.WriteLine("var apiKey = Environment.GetEnvironmentVariable(\"ARCA_API_KEY\");");
+Console.WriteLine("using var arca = new ArcaSimpleClient(apiKey: apiKey);");
+Console.WriteLine();
+Console.WriteLine("if (await arca.IsAvailableAsync())");
+Console.WriteLine("{");
+Console.WriteLine("    var connectionString = await arca.GetSecretValueAsync(\"ConnectionStrings:Database\");");
+Console.WriteLine("    // Usar connectionString...");
+Console.WriteLine("}");
+Console.WriteLine("```");
+
+Console.WriteLine();
+Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 Console.WriteLine("Presiona cualquier tecla para salir...");
 Console.ReadKey();

@@ -5,6 +5,10 @@ using Arca.Infrastructure.Security;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using Application = System.Windows.Application;
+using Color = System.Windows.Media.Color;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+using MessageBox = System.Windows.MessageBox;
 
 namespace Arca.NET.Views;
 
@@ -34,6 +38,7 @@ public partial class LoginWindow : Window
         {
             VaultStatus.Text = $"Vault: {_vaultRepository.GetVaultPath()}";
             CreateVaultButton.Visibility = Visibility.Collapsed;
+            UnlockButton.Visibility = Visibility.Visible;
             UnlockButton.Content = "Unlock Vault";
         }
         else
@@ -81,13 +86,15 @@ public partial class LoginWindow : Window
             // Try to load secrets to verify the password
             await _vaultRepository.LoadSecretsAsync(derivedKey);
 
-            // Success - store key and open main window
+            // Success - store key and open main window via App
             DerivedKey = derivedKey;
             HideLoading();
 
-            var mainWindow = new MainWindow(derivedKey, _vaultRepository, _aesGcmService, _keyDerivationService);
-            mainWindow.Show();
-            Close();
+            // Usar App para abrir MainWindow
+            if (Application.Current is App app)
+            {
+                app.ShowMainWindow(derivedKey, _vaultRepository, _aesGcmService, _keyDerivationService);
+            }
         }
         catch (System.Security.Cryptography.AuthenticationTagMismatchException)
         {
@@ -201,11 +208,12 @@ public partial class LoginWindow : Window
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
 
-            // Open main window
+            // Open main window via App
             DerivedKey = derivedKey;
-            var mainWindow = new MainWindow(derivedKey, _vaultRepository, _aesGcmService, _keyDerivationService);
-            mainWindow.Show();
-            Close();
+            if (Application.Current is App app)
+            {
+                app.ShowMainWindow(derivedKey, _vaultRepository, _aesGcmService, _keyDerivationService);
+            }
         }
         catch (Exception ex)
         {

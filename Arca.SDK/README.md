@@ -12,42 +12,52 @@ dotnet add reference ../Arca.SDK/Arca.SDK.csproj
 
 ### Opción 2: Referencia al DLL
 
-1. **Obtener los DLLs** (después de compilar Arca.SDK):
-   ```
-   Arca.SDK\bin\Debug\net10.0\
-   ??? Arca.SDK.dll
-   ??? Arca.Core.dll
-   ??? (dependencias de gRPC si usas ArcaClient)
-   ```
-
-2. **Agregar referencia en tu `.csproj`**:
-   ```xml
-   <ItemGroup>
-     <Reference Include="Arca.SDK">
-       <HintPath>C:\ruta\a\Arca.SDK.dll</HintPath>
-     </Reference>
-     <Reference Include="Arca.Core">
-       <HintPath>C:\ruta\a\Arca.Core.dll</HintPath>
-     </Reference>
-   </ItemGroup>
-   ```
-
-3. **O copiar DLLs a una carpeta `libs` en tu proyecto**:
-   ```xml
-   <ItemGroup>
-     <Reference Include="Arca.SDK">
-       <HintPath>libs\Arca.SDK.dll</HintPath>
-     </Reference>
-     <Reference Include="Arca.Core">
-       <HintPath>libs\Arca.Core.dll</HintPath>
-     </Reference>
-   </ItemGroup>
-   ```
+```xml
+<ItemGroup>
+  <Reference Include="Arca.SDK">
+    <HintPath>path/to/Arca.SDK.dll</HintPath>
+  </Reference>
+  <Reference Include="Arca.Core">
+    <HintPath>path/to/Arca.Core.dll</HintPath>
+  </Reference>
+</ItemGroup>
+```
 
 ### Opción 3: Paquete NuGet (Cuando esté publicado)
 
 ```bash
 dotnet add package Arca.SDK
+```
+
+---
+
+## ?? Autenticación con API Key
+
+Para acceder a los secretos, tu aplicación necesita una **API Key** generada desde Arca.
+
+### Paso 1: Generar API Key en Arca
+
+1. Abre **Arca.NET** y desbloquea el vault
+2. Haz clic en **?? API Keys**
+3. Ingresa un nombre (ej: "Mi Web API")
+4. Haz clic en **? Generate Key**
+5. **¡Copia la API Key!** Solo se muestra una vez
+
+### Paso 2: Usar la API Key en tu aplicación
+
+```csharp
+using Arca.SDK;
+using Arca.SDK.Clients;
+
+// Crear cliente CON API Key
+using var arca = new ArcaSimpleClient(apiKey: "arca_tu_api_key_aqui");
+
+// Verificar conexión y autenticación
+if (await arca.IsAvailableAsync())
+{
+    var secret = await arca.GetSecretValueAsync("ConnectionStrings:Database");
+    Console.WriteLine(secret);
+}
 ```
 
 ---
@@ -58,15 +68,15 @@ dotnet add package Arca.SDK
 using Arca.SDK;
 using Arca.SDK.Clients;
 
-// Crear cliente
+// Con API Key (recomendado para producción)
+using var arca = new ArcaSimpleClient(apiKey: "arca_xxx...");
+
+// Sin API Key (solo si no hay API Keys configuradas en Arca)
 using var arca = new ArcaSimpleClient();
 
-// Verificar que Arca esté disponible
 if (await arca.IsAvailableAsync())
 {
-    // Obtener un secreto
     var connectionString = await arca.GetSecretValueAsync("ConnectionStrings:SqlServer");
-    Console.WriteLine(connectionString);
 }
 ```
 
@@ -74,119 +84,74 @@ if (await arca.IsAvailableAsync())
 
 ## ?? Ejemplos por Tipo de Aplicación
 
-### Aplicación de Consola
-
-```csharp
-using Arca.SDK;
-using Arca.SDK.Clients;
-
-using var arca = new ArcaSimpleClient();
-
-if (!await arca.IsAvailableAsync())
-{
-    Console.WriteLine("? Arca no está disponible. Abre la app y desbloquea el vault.");
-    return;
-}
-
-// Obtener secreto directamente
-var apiKey = await arca.GetSecretValueAsync("ApiKeys:MiServicio");
-Console.WriteLine($"API Key: {apiKey}");
-
-// O con manejo de resultado
-var result = await arca.GetSecretAsync("ConnectionStrings:Database");
-if (result.Success)
-{
-    Console.WriteLine($"Connection: {result.Value}");
-}
-```
-
 ### ASP.NET Core Web API
 
 ```csharp
 // Program.cs
 var builder = WebApplication.CreateBuilder(args);
 
-// Registrar cliente Arca con DI
-builder.Services.AddArcaSimpleClient();
+// Leer API Key desde configuración (NO guardar en appsettings.json en producción)
+var arcaApiKey = Environment.GetEnvironmentVariable("ARCA_API_KEY");
+
+// Registrar cliente Arca con API Key
+builder.Services.AddArcaSimpleClient(apiKey: arcaApiKey);
 
 var app = builder.Build();
 app.Run();
 ```
 
 ```csharp
-// En un Controller o Service
-public class MiServicio
+// En un Service
+public class DatabaseService
 {
     private readonly IArcaClient _arca;
     
-    public MiServicio(IArcaClient arca)
-    {
-        _arca = arca;
-    }
+    public DatabaseService(IArcaClient arca) => _arca = arca;
     
-    public async Task<string> ObtenerConnectionStringAsync()
+    public async Task<string> GetConnectionStringAsync()
     {
         return await _arca.GetSecretValueAsync("ConnectionStrings:SqlServer");
     }
 }
 ```
 
-### Entity Framework con Arca
+### Aplicación de Consola
 
 ```csharp
-// Program.cs
-var builder = WebApplication.CreateBuilder(args);
+using Arca.SDK;
+using Arca.SDK.Clients;
 
-// Obtener connection string de Arca
-using var arca = new ArcaSimpleClient();
+// Leer API Key desde variable de entorno
+var apiKey = Environment.GetEnvironmentVariable("ARCA_API_KEY");
+
+using var arca = new ArcaSimpleClient(apiKey: apiKey);
+
 if (!await arca.IsAvailableAsync())
-    throw new Exception("Arca no disponible");
-
-var connectionString = await arca.GetSecretValueAsync("ConnectionStrings:DefaultConnection");
-
-// Configurar DbContext
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(connectionString));
-```
-
-### WPF / Windows Forms
-
-```csharp
-public partial class MainWindow : Window
 {
-    private readonly IArcaClient _arca = new ArcaSimpleClient();
-    
-    private async void Window_Loaded(object sender, RoutedEventArgs e)
-    {
-        if (!await _arca.IsAvailableAsync())
-        {
-            MessageBox.Show("Abre Arca y desbloquea el vault primero.");
-            return;
-        }
-        
-        var config = await _arca.GetSecretValueAsync("Config:ApiEndpoint");
-        // usar config...
-    }
+    Console.WriteLine("? Arca no disponible o API Key inválida");
+    return;
 }
+
+// Obtener secretos
+var dbConnection = await arca.GetSecretValueAsync("ConnectionStrings:Database");
+var apiSecret = await arca.GetSecretValueAsync("ApiKeys:External");
 ```
 
-### Worker Service / Background Service
+### Worker Service
 
 ```csharp
 public class MiWorker : BackgroundService
 {
     private readonly IArcaClient _arca;
     
-    public MiWorker(IArcaClient arca)
-    {
-        _arca = arca;
-    }
+    public MiWorker(IArcaClient arca) => _arca = arca;
     
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // Esperar a que Arca esté disponible
         while (!await _arca.IsAvailableAsync() && !stoppingToken.IsCancellationRequested)
         {
+            Console.WriteLine("Esperando conexión con Arca...");
             await Task.Delay(5000, stoppingToken);
         }
         
@@ -197,40 +162,51 @@ public class MiWorker : BackgroundService
 }
 ```
 
+### Con Dependency Injection y Configuración
+
+```csharp
+// Program.cs
+builder.Services.AddArcaClient(options =>
+{
+    options.ApiKey = Environment.GetEnvironmentVariable("ARCA_API_KEY");
+    options.UseSimpleClient = true;
+    options.Timeout = TimeSpan.FromSeconds(10);
+});
+```
+
 ---
 
 ## ?? API Completa
 
 | Método | Descripción |
 |--------|-------------|
-| `IsAvailableAsync()` | Verifica si Arca está corriendo y desbloqueado |
-| `GetStatusAsync()` | Obtiene estado del vault (IsUnlocked, SecretCount) |
-| `GetSecretAsync(key)` | Obtiene secreto con resultado (Success, Value, Error) |
-| `GetSecretValueAsync(key)` | Obtiene valor directamente (lanza excepción si no existe) |
-| `GetSecretsAsync(keys)` | Obtiene múltiples secretos en un diccionario |
-| `ListKeysAsync(filter?)` | Lista todas las claves (con filtro opcional) |
-| `KeyExistsAsync(key)` | Verifica si una clave existe |
+| `IsAvailableAsync()` | Verifica disponibilidad Y autenticación |
+| `AuthenticateAsync()` | Verifica si la API Key es válida |
+| `GetStatusAsync()` | Obtiene estado del vault |
+| `GetSecretAsync(key)` | Obtiene secreto con resultado |
+| `GetSecretValueAsync(key)` | Obtiene valor (lanza excepción si no existe) |
+| `GetSecretsAsync(keys)` | Obtiene múltiples secretos |
+| `ListKeysAsync(filter?)` | Lista claves disponibles |
+| `KeyExistsAsync(key)` | Verifica si existe una clave |
 
 ---
 
-## ?? Estructura Recomendada de Claves
+## ?? Gestión de API Keys
 
-```
-ConnectionStrings:SqlServer
-ConnectionStrings:Redis
-ConnectionStrings:MongoDB
+### Desde la UI de Arca
 
-ApiKeys:OpenAI
-ApiKeys:SendGrid
-ApiKeys:Stripe
+| Acción | Descripción |
+|--------|-------------|
+| **Generar** | Crea una nueva API Key con nombre descriptivo |
+| **Revocar** | Elimina una API Key (las apps que la usen perderán acceso) |
+| **Ver uso** | Muestra cuándo fue usada por última vez |
 
-Credentials:FTP:Host
-Credentials:FTP:User
-Credentials:FTP:Password
+### Mejores Prácticas
 
-Config:JwtSecret
-Config:EncryptionKey
-```
+1. **Una API Key por aplicación** - Facilita revocar acceso si es necesario
+2. **No guardar en código** - Usar variables de entorno o secrets manager
+3. **Rotar periódicamente** - Generar nuevas keys y revocar las antiguas
+4. **Nombres descriptivos** - "WebAPI-Produccion", "Worker-Reportes", etc.
 
 ---
 
@@ -243,86 +219,186 @@ try
 }
 catch (ArcaSecretNotFoundException ex)
 {
-    // La clave no existe en el vault
+    // La clave no existe
     Console.WriteLine($"Clave no encontrada: {ex.Key}");
 }
 catch (ArcaException ex)
 {
-    // Error de conexión (Arca no está corriendo o vault bloqueado)
+    // Error de conexión, autenticación, etc.
     Console.WriteLine($"Error: {ex.Message}");
 }
 ```
 
 ---
 
-## ??? Arquitectura
+## ?? Ubicación del Vault
+
+El vault se almacena en la carpeta de datos locales del usuario:
+
+```
+%LOCALAPPDATA%\Arca\
+??? vault.vlt    ? Secretos cifrados (AES-256-GCM)
+??? vault.keys   ? API Keys cifradas
+```
+
+**Ruta completa típica:**
+```
+C:\Users\TuUsuario\AppData\Local\Arca\vault.vlt
+```
+
+### Abrir la carpeta del Vault
+
+**PowerShell:**
+```powershell
+explorer "$env:LOCALAPPDATA\Arca"
+```
+
+**CMD:**
+```cmd
+explorer %LOCALAPPDATA%\Arca
+```
+
+---
+
+## ?? Seguridad y Recuperación
+
+### Diseño Zero-Knowledge
+
+Arca utiliza un diseño de **Zero-Knowledge**, lo que significa que:
+
+- ? Tu contraseña maestra **NUNCA** se almacena
+- ? Los secretos están cifrados con **AES-256-GCM**
+- ? La clave de cifrado se deriva con **Argon2id**
+- ? Solo tú puedes descifrar tus secretos
+
+### ?? Si pierdes la contraseña maestra
+
+**No hay forma de recuperar la contraseña maestra ni los secretos.**
+
+Esto es **intencional** por seguridad. Si olvidas tu contraseña:
+
+| Opción | Descripción |
+|--------|-------------|
+| **Intentar recordar** | Prueba variaciones de contraseñas que suelas usar |
+| **Empezar de nuevo** | Eliminar el vault y crear uno nuevo |
+| **Restaurar backup** | Si tienes una copia de seguridad de tus secretos |
+
+### Eliminar el Vault y empezar de nuevo
+
+```powershell
+# ?? ADVERTENCIA: Esto eliminará TODOS tus secretos y API Keys
+Remove-Item "$env:LOCALAPPDATA\Arca\vault.vlt" -Force
+Remove-Item "$env:LOCALAPPDATA\Arca\vault.keys" -Force
+```
+
+### Recomendaciones para NO perder acceso
+
+1. **Guarda tu contraseña maestra en otro administrador de contraseñas**
+   - Bitwarden, 1Password, KeePass, LastPass, etc.
+
+2. **Escríbela en papel y guárdala en lugar seguro**
+   - Caja fuerte, sobre sellado, etc.
+
+3. **Haz backup de tus secretos**
+   - Exporta tus secretos periódicamente a un lugar seguro
+
+---
+
+## ??? Arquitectura de Seguridad
 
 ```
 ???????????????????????????????????????????????????????????????
-?                    SERVIDOR / PC DE DESARROLLO              ?
+?                         SEGURIDAD                           ?
 ???????????????????????????????????????????????????????????????
 ?                                                             ?
 ?  ???????????????????                                        ?
-?  ?    Arca.NET     ?  ? Usuario desbloquea con contraseña   ?
-?  ?   (WPF App)     ?                                        ?
+?  ?    Arca.NET     ?  ? Contraseña maestra (Argon2id)       ?
+?  ?   (WPF App)     ?  ? API Keys (SHA256 hash)              ?
 ?  ???????????????????                                        ?
 ?           ?                                                 ?
-?           ? Named Pipe: arca-vault-simple                   ?
+?           ? Named Pipe (local only)                         ?
 ?           ?                                                 ?
 ?  ????????????????????????????????????????????????????????   ?
 ?  ?                                                       ?   ?
-?  ?  ?????????????  ?????????????  ????????????????????? ?   ?
-?  ?  ? Web API   ?  ? Console   ?  ? Windows Service   ? ?   ?
-?  ?  ? (IIS)     ?  ?   App     ?  ?    (Worker)       ? ?   ?
-?  ?  ?????????????  ?????????????  ????????????????????? ?   ?
-?  ?                                                       ?   ?
-?  ?  using var arca = new ArcaSimpleClient();            ?   ?
-?  ?  var secret = await arca.GetSecretValueAsync("key"); ?   ?
+?  ?  App 1: arca_abc123... ? Autorizada                 ?   ?
+?  ?  App 2: arca_xyz789... ? Autorizada                 ?   ?
+?  ?  App 3: (sin key)      ? Rechazada                  ?   ?
 ?  ?                                                       ?   ?
 ?  ?????????????????????????????????????????????????????????   ?
 ?                                                             ?
 ???????????????????????????????????????????????????????????????
 ```
 
----
+### Capas de Seguridad
 
-## ?? Seguridad
-
-- ? **Cifrado AES-256-GCM** - Secretos cifrados en disco
-- ? **Argon2id** - Derivación de clave segura
-- ? **Named Pipes** - Comunicación local, no expuesta a red
-- ? **Zero-Knowledge** - Solo el usuario conoce la contraseña maestra
-- ? **Memoria protegida** - Claves se borran al bloquear/cerrar
-
----
-
-## ?? Ubicación del Vault
-
-El archivo vault se guarda en:
-```
-%LOCALAPPDATA%\Arca\vault.vlt
-```
-
-Por ejemplo:
-```
-C:\Users\TuUsuario\AppData\Local\Arca\vault.vlt
-```
+| Capa | Tecnología | Descripción |
+|------|------------|-------------|
+| **Cifrado** | AES-256-GCM | Cifrado autenticado de grado militar |
+| **Derivación** | Argon2id | Resistente a ataques de GPU/ASIC |
+| **API Keys** | SHA256 | Solo se almacena el hash |
+| **Comunicación** | Named Pipes | Solo local, no expuesto a red |
+| **Autenticación** | Por request | Cada solicitud requiere API Key |
 
 ---
 
-## ??? Requisitos
+## ?? Seguridad de API Keys
 
-- **.NET 8.0** o superior
-- **Windows** (Named Pipes son específicos de Windows)
-- **Arca.NET** debe estar ejecutándose con el vault desbloqueado
+- ? Las API Keys se generan con 256 bits de entropía
+- ? Solo se almacena el hash SHA256 (no la key original)
+- ? Las keys empiezan con `arca_` para fácil identificación
+- ? Se puede revocar acceso instantáneamente
+- ? Se registra el último uso de cada key
+- ? Las keys NO expiran automáticamente (debes revocarlas manualmente)
 
 ---
 
-## ?? Flujo de Trabajo Típico
+## ?? Variables de Entorno
 
-1. **Iniciar el día**: Abrir Arca.NET y desbloquear con tu contraseña maestra
-2. **Desarrollar**: Tus aplicaciones obtienen secretos automáticamente via SDK
-3. **Terminar el día**: Cerrar Arca.NET (los secretos se protegen automáticamente)
+Recomendamos usar variables de entorno para la API Key:
+
+**Windows (PowerShell - Sesión actual):**
+```powershell
+$env:ARCA_API_KEY = "arca_tu_api_key_aqui"
+```
+
+**Windows (Permanente - Usuario):**
+```powershell
+[Environment]::SetEnvironmentVariable("ARCA_API_KEY", "arca_xxx...", "User")
+```
+
+**Windows (Permanente - Sistema):**
+```powershell
+# Requiere permisos de administrador
+[Environment]::SetEnvironmentVariable("ARCA_API_KEY", "arca_xxx...", "Machine")
+```
+
+**En tu código:**
+```csharp
+var apiKey = Environment.GetEnvironmentVariable("ARCA_API_KEY");
+using var arca = new ArcaSimpleClient(apiKey: apiKey);
+```
+
+---
+
+## ? FAQ
+
+### ¿Puedo usar la misma API Key en varias aplicaciones?
+Sí, pero **no es recomendado**. Es mejor crear una API Key por aplicación para poder revocar acceso de forma individual.
+
+### ¿Las API Keys expiran?
+No, las API Keys son válidas indefinidamente hasta que las revoques manualmente.
+
+### ¿Qué pasa si pierdo mi API Key?
+Puedes generar una nueva desde Arca UI. La key anterior seguirá funcionando.
+
+### ¿Qué pasa si alguien obtiene mi API Key?
+Revócala inmediatamente desde Arca UI y genera una nueva.
+
+### ¿Funciona en red?
+No, Arca solo funciona localmente mediante Named Pipes. Las aplicaciones deben ejecutarse en la misma máquina que Arca.
+
+### ¿Puedo tener múltiples vaults?
+Actualmente no. Solo hay un vault por usuario en `%LOCALAPPDATA%\Arca\`.
 
 ---
 
