@@ -1,8 +1,5 @@
 namespace Arca.Core.Entities;
 
-/// <summary>
-/// Representa una entrada de secreto en el vault.
-/// </summary>
 public record SecretEntry(
     Guid Id,
     string Key,

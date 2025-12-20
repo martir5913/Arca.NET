@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Arca.Core.Entities;
 using Arca.Core.Interfaces;
+using Arca.NET.Services;
 using Arca.NET.Views;
 
 namespace Arca.NET;
@@ -13,6 +14,7 @@ public partial class MainWindow : Window
     private readonly IVaultRepository _vaultRepository;
     private readonly IAesGcmService _aesGcmService;
     private readonly IKeyDerivationService _keyDerivationService;
+    private readonly EmbeddedSecretServer _secretServer;
 
     private ObservableCollection<SecretEntry> _secrets = [];
     private SecretEntry? _editingSecret;
@@ -29,13 +31,27 @@ public partial class MainWindow : Window
         _vaultRepository = vaultRepository;
         _aesGcmService = aesGcmService;
         _keyDerivationService = keyDerivationService;
+        _secretServer = new EmbeddedSecretServer();
 
         Loaded += MainWindow_Loaded;
+        Closing += MainWindow_Closing;
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         await LoadSecretsAsync();
+
+        // Iniciar servidor embebido para que otras apps puedan obtener secretos
+        _secretServer.UpdateSecrets(_secrets);
+        _secretServer.Start();
+
+        txtStatus.Text = "🔓 Vault unlocked - SDK server active";
+    }
+
+    private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        _secretServer.Stop();
+        _secretServer.Dispose();
     }
 
     private async Task LoadSecretsAsync()
@@ -46,10 +62,13 @@ public partial class MainWindow : Window
             _secrets = new ObservableCollection<SecretEntry>(secrets);
             lstSecrets.ItemsSource = _secrets;
             UpdateSecretCount();
+
+            // Actualizar servidor embebido
+            _secretServer.UpdateSecrets(_secrets);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error loading secrets: {ex.Message}", "Error", 
+            MessageBox.Show($"Error loading secrets: {ex.Message}", "Error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -59,10 +78,13 @@ public partial class MainWindow : Window
         try
         {
             await _vaultRepository.SaveSecretsAsync(_secrets, _derivedKey);
+
+            // Actualizar servidor embebido
+            _secretServer.UpdateSecrets(_secrets);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error saving secrets: {ex.Message}", "Error", 
+            MessageBox.Show($"Error saving secrets: {ex.Message}", "Error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -74,6 +96,9 @@ public partial class MainWindow : Window
 
     private void LockButton_Click(object sender, RoutedEventArgs e)
     {
+        // Detener servidor embebido
+        _secretServer.Stop();
+
         // Clear sensitive data
         Array.Clear(_derivedKey, 0, _derivedKey.Length);
 
@@ -166,7 +191,7 @@ public partial class MainWindow : Window
             };
             timer.Tick += (s, args) =>
             {
-                txtStatus.Text = "🔓 Vault unlocked";
+                txtStatus.Text = "🔓 Vault unlocked - SDK server active";
                 timer.Stop();
             };
             timer.Start();
@@ -201,8 +226,8 @@ public partial class MainWindow : Window
         }
 
         // Check for duplicate key (excluding current editing secret)
-        var existingKey = _secrets.FirstOrDefault(s => 
-            s.Key.Equals(key, StringComparison.OrdinalIgnoreCase) && 
+        var existingKey = _secrets.FirstOrDefault(s =>
+            s.Key.Equals(key, StringComparison.OrdinalIgnoreCase) &&
             s.Id != _editingSecret?.Id);
 
         if (existingKey is not null)

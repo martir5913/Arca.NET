@@ -11,6 +11,11 @@
   <ItemGroup>
     <Folder Include="Assets\" />
     <Folder Include="ViewModels\" />
+    <Folder Include="Views\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Grpc.Net.Client" Version="2.67.0" />
   </ItemGroup>
 
   <ItemGroup>
