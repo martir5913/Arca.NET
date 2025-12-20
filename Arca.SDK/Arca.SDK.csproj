@@ -17,8 +17,10 @@
     <PackageProjectUrl>https://github.com/martir5913/Arca.NET</PackageProjectUrl>
     <RepositoryUrl>https://github.com/martir5913/Arca.NET</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Copyright>Copyright (c) 2025 Develop Martir. All rights reserved.</Copyright>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     
     <!-- Generar paquete NuGet al compilar en Release -->
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
@@ -33,6 +35,7 @@
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="..\LICENSE" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>

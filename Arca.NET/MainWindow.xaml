@@ -18,8 +18,15 @@
             <Setter Property="Foreground" Value="#e8e8e8"/>
             <Setter Property="BorderBrush" Value="#0f3460"/>
             <Setter Property="BorderThickness" Value="2"/>
-            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Padding" Value="8,6"/>
             <Setter Property="FontSize" Value="13"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        
+        <Style x:Key="SmallTextBox" TargetType="TextBox" BasedOn="{StaticResource ModernTextBox}">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="MinHeight" Value="28"/>
         </Style>
         
         <Style x:Key="PrimaryButton" TargetType="Button">
@@ -256,8 +263,8 @@
                 Visibility="Collapsed">
             <Border Background="#1a1a2e" 
                     CornerRadius="8"
-                    Width="600"
-                    MaxHeight="500"
+                    Width="700"
+                    MaxHeight="600"
                     VerticalAlignment="Center"
                     HorizontalAlignment="Center"
                     Padding="25">
@@ -267,83 +274,167 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     
                     <!-- Header -->
                     <StackPanel Grid.Row="0" Margin="0,0,0,15">
-                        <TextBlock Text="🔑 API Keys" 
+                        <TextBlock Text="API Keys" 
                                    FontSize="20" FontWeight="Bold"
                                    Foreground="#e94560"/>
-                        <TextBlock Text="Generate API Keys to allow external applications to access secrets via SDK." 
+                        <TextBlock Text="Generate API Keys to allow external applications to access specific secrets via SDK." 
                                    Foreground="#888" FontSize="12" Margin="0,5,0,0" TextWrapping="Wrap"/>
                     </StackPanel>
                     
                     <!-- New Key Form -->
                     <Border Grid.Row="1" Background="#16213e" CornerRadius="6" Padding="15" Margin="0,0,0,15">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox x:Name="txtNewKeyName" 
-                                     Style="{StaticResource ModernTextBox}"
-                                     Tag="Enter a name for the new API Key (e.g., 'My Web API')"/>
-                            <Button Grid.Column="1" 
-                                    Content="➕ Generate Key" 
+                        <StackPanel>
+                            <!-- Name and Access Level -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="txtNewKeyName" 
+                                         Style="{StaticResource ModernTextBox}"
+                                         Tag="API Key name (e.g., 'WebAPI-Production')"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0">
+                                    <RadioButton x:Name="rbFullAccess" Content="Full Access" 
+                                                 Foreground="#2ed573" IsChecked="True" 
+                                                 VerticalAlignment="Center" Margin="0,0,10,0"
+                                                 GroupName="AccessLevel"
+                                                 Checked="AccessLevel_Changed"/>
+                                    <RadioButton x:Name="rbRestrictedAccess" Content="Restricted" 
+                                                 Foreground="#ffa502" VerticalAlignment="Center"
+                                                 GroupName="AccessLevel"
+                                                 Checked="AccessLevel_Changed"/>
+                                </StackPanel>
+                            </Grid>
+                            
+                            <!-- Secrets Selection (visible when Restricted) -->
+                            <Border x:Name="pnlSecretsSelection" Visibility="Collapsed" 
+                                    Background="#0f3460" CornerRadius="4" Padding="12" Margin="0,12,0,0">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="txtSecretFilter" 
+                                                 Style="{StaticResource SmallTextBox}"
+                                                 Tag="Filter secrets..."
+                                                 TextChanged="SecretFilter_TextChanged"/>
+                                        <Button Grid.Column="1" Content="All" 
+                                                Style="{StaticResource IconButton}"
+                                                Padding="10,6" Margin="8,0,0,0" FontSize="11"
+                                                Click="SelectAllSecrets_Click"/>
+                                        <Button Grid.Column="2" Content="None" 
+                                                Style="{StaticResource IconButton}"
+                                                Padding="10,6" Margin="5,0,0,0" FontSize="11"
+                                                Click="SelectNoSecrets_Click"/>
+                                    </Grid>
+                                    
+                                    <TextBlock Text="Select secrets this API Key can access:" 
+                                               Foreground="#888" FontSize="11" Margin="0,0,0,8"/>
+                                    
+                                    <ScrollViewer MaxHeight="130" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl x:Name="lstSecretsCheckboxes">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <CheckBox Content="{Binding Key}" 
+                                                              IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                              Foreground="#e8e8e8" 
+                                                              FontSize="12"
+                                                              Margin="0,3"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                    
+                                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                        <CheckBox x:Name="chkCanList" 
+                                                  Content="Can list available secrets" 
+                                                  Foreground="#888" FontSize="11"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                            
+                            <!-- Generate Button -->
+                            <Button Content="Generate API Key" 
                                     Style="{StaticResource PrimaryButton}"
-                                    Margin="10,0,0,0"
+                                    Margin="0,10,0,0"
+                                    HorizontalAlignment="Right"
                                     Click="GenerateApiKeyButton_Click"/>
-                        </Grid>
+                        </StackPanel>
                     </Border>
                     
-                    <!-- Keys List -->
-                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-                        <ItemsControl x:Name="lstApiKeys">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Background="#16213e" CornerRadius="6" Margin="0,0,0,8" Padding="12">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            
-                                            <StackPanel>
-                                                <TextBlock Text="{Binding Name}" FontWeight="Bold" 
-                                                           Foreground="#e8e8e8" FontSize="14"/>
-                                                <TextBlock Foreground="#666" FontSize="11" Margin="0,3,0,0">
-                                                    <Run Text="Created: "/><Run Text="{Binding CreatedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"/>
-                                                    <Run Text=" | Last used: "/>
-                                                    <Run Text="{Binding LastUsedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm}', TargetNullValue='Never'}"/>
-                                                </TextBlock>
-                                            </StackPanel>
-                                            
-                                            <Button Grid.Column="1" 
-                                                    Content="🗑️" 
-                                                    Style="{StaticResource IconButton}"
-                                                    Tag="{Binding Id}"
-                                                    Click="DeleteApiKeyButton_Click"
-                                                    ToolTip="Revoke this API Key"/>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
+                    <!-- Existing Keys List -->
+                    <StackPanel Grid.Row="2">
+                        <TextBlock Text="Existing API Keys:" Foreground="#888" FontSize="11" Margin="0,0,0,8"/>
+                        <ScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl x:Name="lstApiKeys">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#16213e" CornerRadius="6" Margin="0,0,0,8" Padding="12">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                
+                                                <StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding Name}" FontWeight="Bold" 
+                                                                   Foreground="#e8e8e8" FontSize="13"/>
+                                                        <TextBlock Text="{Binding Permissions.Level}" 
+                                                                   Foreground="#ffa502" FontSize="10" 
+                                                                   Margin="8,2,0,0" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <TextBlock Foreground="#666" FontSize="10" Margin="0,2,0,0">
+                                                        <Run Text="Last used: "/>
+                                                        <Run Text="{Binding LastUsedAt, StringFormat='{}{0:MM/dd HH:mm}', TargetNullValue='Never'}"/>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                                
+                                                <Button Grid.Column="1" 
+                                                        Content="View" 
+                                                        Style="{StaticResource IconButton}"
+                                                        Padding="8,4" FontSize="10"
+                                                        Tag="{Binding Id}"
+                                                        Click="ViewApiKeyPermissions_Click"
+                                                        ToolTip="View permissions"/>
+                                                
+                                                <Button Grid.Column="2" 
+                                                        Content="Revoke" 
+                                                        Style="{StaticResource IconButton}"
+                                                        Foreground="#ff6b6b"
+                                                        Padding="8,4" FontSize="10" Margin="5,0,0,0"
+                                                        Tag="{Binding Id}"
+                                                        Click="DeleteApiKeyButton_Click"
+                                                        ToolTip="Revoke this API Key"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </StackPanel>
                     
                     <!-- Generated Key Display -->
-                    <Border x:Name="pnlGeneratedKey" Grid.Row="2" 
+                    <Border x:Name="pnlGeneratedKey" Grid.Row="3" 
                             Background="#0f3460" CornerRadius="6" Padding="15"
-                            Visibility="Collapsed" VerticalAlignment="Top">
+                            Visibility="Collapsed" Margin="0,10,0,0">
                         <StackPanel>
-                            <TextBlock Text="⚠️ Copy this API Key now! It won't be shown again." 
+                            <TextBlock Text="Copy this API Key now! It won't be shown again." 
                                        Foreground="#ffaa00" FontWeight="Bold" FontSize="12"/>
                             <TextBox x:Name="txtGeneratedKey" 
                                      Style="{StaticResource ModernTextBox}"
                                      IsReadOnly="True" 
                                      Margin="0,10,0,0"
                                      FontFamily="Consolas"/>
-                            <Button Content="📋 Copy to Clipboard" 
+                            <Button Content="Copy to Clipboard" 
                                     Style="{StaticResource PrimaryButton}"
                                     Margin="0,10,0,0"
                                     Click="CopyApiKeyButton_Click"/>
@@ -351,7 +442,7 @@
                     </Border>
                     
                     <!-- Footer -->
-                    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
+                    <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
                         <Button Content="Close" 
                                 Style="{StaticResource IconButton}"
                                 Padding="15,10"
@@ -484,7 +575,7 @@
                     
                     <!-- Footer -->
                     <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
-                        <Button Content="🔄 Refresh" 
+                        <Button Content="Refresh" 
                                 Style="{StaticResource IconButton}"
                                 Padding="15,10"
                                 Click="RefreshAuditLogButton_Click"/>
@@ -497,5 +588,16 @@
                 </Grid>
             </Border>
         </Border>
+        
+        <!-- Notifications Container -->
+        <StackPanel x:Name="notificationsContainer" 
+                    Grid.RowSpan="4"
+                    VerticalAlignment="Top"
+                    HorizontalAlignment="Right"
+                    Margin="20"
+                    IsHitTestVisible="True"/>
+        
+        <!-- Confirm Dialog Container -->
+        <Grid x:Name="dialogContainer" Grid.RowSpan="4"/>
     </Grid>
 </Window>

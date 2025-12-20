@@ -1,6 +1,8 @@
 ﻿using Arca.Core.Entities;
 using Arca.Core.Interfaces;
 using Arca.Core.Security;
+using Arca.NET.Controls;
+using Arca.NET.Models;
 using Arca.NET.Services;
 using System.Collections.ObjectModel;
 using System.Windows;
@@ -8,7 +10,6 @@ using System.Windows.Controls;
 using Application = System.Windows.Application;
 using Button = System.Windows.Controls.Button;
 using Clipboard = System.Windows.Clipboard;
-using MessageBox = System.Windows.MessageBox;
 
 namespace Arca.NET;
 
@@ -47,13 +48,17 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        // Inicializar servicios de notificaciones y diálogos
+        NotificationService.Initialize(notificationsContainer);
+        DialogService.Initialize(dialogContainer);
+
         await LoadSecretsAsync();
         await LoadApiKeysAsync();
 
         // Iniciar servidor embebido para que otras apps puedan obtener secretos
         _secretServer.UpdateSecrets(_secrets);
         _secretServer.UpdateApiKeys(_apiKeys);
-        _secretServer.RequireAuthentication = _apiKeys.Count > 0; // Solo requerir auth si hay keys configuradas
+        _secretServer.RequireAuthentication = _apiKeys.Count > 0;
         _secretServer.Start();
 
         UpdateStatusBar();
@@ -117,10 +122,11 @@ public partial class MainWindow : Window
             var secrets = await _vaultRepository.LoadSecretsAsync(_derivedKey);
             _secrets = new ObservableCollection<SecretEntry>(secrets);
             lstSecrets.ItemsSource = _secrets;
-            UpdateSecretCount();
 
             // Actualizar servidor embebido
             _secretServer.UpdateSecrets(_secrets);
+
+            UpdateSecretCount();
 
             // Actualizar App con el conteo
             if (Application.Current is App app)
@@ -130,8 +136,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error loading secrets: {ex.Message}", "Error",
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            NotificationService.ShowError("Error", $"Error loading secrets: {ex.Message}");
         }
     }
 
@@ -150,8 +155,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error loading API keys: {ex.Message}", "Error",
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            NotificationService.ShowError("Error", $"Error loading API keys: {ex.Message}");
         }
     }
 
@@ -160,20 +164,11 @@ public partial class MainWindow : Window
         try
         {
             await _vaultRepository.SaveSecretsAsync(_secrets, _derivedKey);
-
-            // Actualizar servidor embebido
             _secretServer.UpdateSecrets(_secrets);
-
-            // Actualizar App con el conteo
-            if (Application.Current is App app)
-            {
-                app.UpdateSecretCount(_secrets.Count);
-            }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error saving secrets: {ex.Message}", "Error",
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            NotificationService.ShowError("Error", $"Error saving secrets: {ex.Message}");
         }
     }
 
@@ -191,8 +186,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error saving API keys: {ex.Message}", "Error",
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            NotificationService.ShowError("Error", $"Error saving API keys: {ex.Message}");
         }
     }
 
@@ -275,22 +269,23 @@ public partial class MainWindow : Window
     {
         if (sender is Button { Tag: Guid id })
         {
-            var result = MessageBox.Show(
-                "Are you sure you want to delete this secret?",
-                "Confirm Delete",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
+            var secret = _secrets.FirstOrDefault(s => s.Id == id);
+            if (secret is null) return;
 
-            if (result == MessageBoxResult.Yes)
+            var confirmed = await DialogService.ConfirmDangerousAsync(
+                "Delete Secret",
+                $"Are you sure you want to delete the secret '{secret.Key}'?\n\nThis action cannot be undone.",
+                "Delete",
+                "Cancel");
+
+            if (confirmed)
             {
-                var secret = _secrets.FirstOrDefault(s => s.Id == id);
-                if (secret is not null)
-                {
-                    _secrets.Remove(secret);
-                    await SaveSecretsAsync();
-                    UpdateSecretCount();
-                    RefreshList();
-                }
+                _secrets.Remove(secret);
+                await SaveSecretsAsync();
+                UpdateSecretCount();
+                RefreshList();
+                
+                NotificationService.ShowSuccess("Deleted", $"Secret '{secret.Key}' has been deleted.", 3);
             }
         }
     }
@@ -300,19 +295,7 @@ public partial class MainWindow : Window
         if (sender is Button { Tag: string value })
         {
             Clipboard.SetText(value);
-            txtStatus.Text = "Value copied to clipboard!";
-
-            // Reset status after 2 seconds
-            var timer = new System.Windows.Threading.DispatcherTimer
-            {
-                Interval = TimeSpan.FromSeconds(2)
-            };
-            timer.Tick += (s, args) =>
-            {
-                txtStatus.Text = "Vault unlocked - SDK server active";
-                timer.Stop();
-            };
-            timer.Start();
+            NotificationService.ShowSuccess("Copied", "Secret value copied to clipboard.", 2);
         }
     }
 
@@ -406,12 +389,94 @@ public partial class MainWindow : Window
 
     #region API Keys Management
 
+    private ObservableCollection<SecretSelectionItem> _secretSelectionItems = [];
+
     private void ApiKeysButton_Click(object sender, RoutedEventArgs e)
     {
+        // Cargar lista de secretos para checkboxes
+        _secretSelectionItems = new ObservableCollection<SecretSelectionItem>(
+            _secrets.Select(s => new SecretSelectionItem { Key = s.Key, IsSelected = false }));
+        lstSecretsCheckboxes.ItemsSource = _secretSelectionItems;
+
+        // Reset form
         lstApiKeys.ItemsSource = _apiKeys;
         pnlGeneratedKey.Visibility = Visibility.Collapsed;
         txtNewKeyName.Text = "";
+        txtSecretFilter.Text = "";
+        rbFullAccess.IsChecked = true;
+        chkCanList.IsChecked = false;
+        pnlSecretsSelection.Visibility = Visibility.Collapsed;
         pnlApiKeys.Visibility = Visibility.Visible;
+    }
+
+    private void AccessLevel_Changed(object sender, RoutedEventArgs e)
+    {
+        if (pnlSecretsSelection == null) return;
+        
+        pnlSecretsSelection.Visibility = rbRestrictedAccess.IsChecked == true 
+            ? Visibility.Visible 
+            : Visibility.Collapsed;
+    }
+
+    private void SecretFilter_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        var filter = txtSecretFilter.Text.Trim();
+        
+        if (string.IsNullOrEmpty(filter))
+        {
+            lstSecretsCheckboxes.ItemsSource = _secretSelectionItems;
+        }
+        else
+        {
+            var filtered = _secretSelectionItems
+                .Where(s => s.Key.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            lstSecretsCheckboxes.ItemsSource = filtered;
+        }
+    }
+
+    private void SelectAllSecrets_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var item in _secretSelectionItems)
+        {
+            item.IsSelected = true;
+        }
+    }
+
+    private void SelectNoSecrets_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var item in _secretSelectionItems)
+        {
+            item.IsSelected = false;
+        }
+    }
+
+    private void ViewApiKeyPermissions_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: Guid id })
+        {
+            var apiKey = _apiKeys.FirstOrDefault(k => k.Id == id);
+            if (apiKey == null) return;
+
+            var permissions = apiKey.Permissions;
+            string message;
+
+            if (permissions.Level == AccessLevel.Full)
+            {
+                message = $"Access Level: Full Access\n\nCan access ALL secrets.";
+                NotificationService.ShowInfo($"API Key: {apiKey.Name}", message, 8);
+            }
+            else
+            {
+                var secretsCount = permissions.AllowedSecrets.Count;
+                var secretsList = secretsCount > 0 
+                    ? string.Join(", ", permissions.AllowedSecrets.Take(5)) + (secretsCount > 5 ? $" (+{secretsCount - 5} more)" : "")
+                    : "(none)";
+
+                message = $"Access: Restricted\nSecrets: {secretsList}\nCan List: {(permissions.CanList ? "Yes" : "No")}";
+                NotificationService.ShowInfo($"API Key: {apiKey.Name}", message, 10);
+            }
+        }
     }
 
     private async void GenerateApiKeyButton_Click(object sender, RoutedEventArgs e)
@@ -420,10 +485,42 @@ public partial class MainWindow : Window
 
         if (string.IsNullOrWhiteSpace(name))
         {
-            MessageBox.Show("Please enter a name for the API Key.", "Validation",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            NotificationService.ShowWarning("Validation", "Please enter a name for the API Key.");
             return;
         }
+
+        // Determinar nivel de acceso y permisos
+        AccessLevel accessLevel;
+        List<string> allowedSecrets = [];
+        List<string> allowedPrefixes = [];
+        bool canList;
+
+        if (rbFullAccess.IsChecked == true)
+        {
+            accessLevel = AccessLevel.Full;
+            canList = true;
+        }
+        else
+        {
+            accessLevel = AccessLevel.Restricted;
+            
+            // Obtener secretos seleccionados de los checkboxes
+            allowedSecrets = _secretSelectionItems
+                .Where(s => s.IsSelected)
+                .Select(s => s.Key)
+                .ToList();
+
+            canList = chkCanList.IsChecked == true;
+
+            // Validar que tenga al menos un secreto seleccionado
+            if (allowedSecrets.Count == 0)
+            {
+                NotificationService.ShowWarning("Validation", "Please select at least one secret for this API Key to access.");
+                return;
+            }
+        }
+
+        var permissions = new ApiKeyPermissions(accessLevel, allowedSecrets, allowedPrefixes, canList);
 
         // Generar nueva API Key
         var (apiKey, keyHash) = ApiKeyService.GenerateApiKey();
@@ -435,7 +532,8 @@ public partial class MainWindow : Window
             $"Generated on {DateTime.Now:yyyy-MM-dd HH:mm}",
             DateTime.UtcNow,
             null,
-            true);
+            true,
+            permissions);
 
         _apiKeys.Add(newApiKey);
         await SaveApiKeysAsync();
@@ -447,7 +545,16 @@ public partial class MainWindow : Window
         // Mostrar la API Key generada
         txtGeneratedKey.Text = apiKey;
         pnlGeneratedKey.Visibility = Visibility.Visible;
+        
+        // Limpiar formulario
         txtNewKeyName.Text = "";
+        txtSecretFilter.Text = "";
+        rbFullAccess.IsChecked = true;
+        foreach (var item in _secretSelectionItems)
+        {
+            item.IsSelected = false;
+        }
+        chkCanList.IsChecked = false;
 
         // Refrescar lista
         lstApiKeys.ItemsSource = null;
@@ -459,12 +566,7 @@ public partial class MainWindow : Window
     private void CopyApiKeyButton_Click(object sender, RoutedEventArgs e)
     {
         Clipboard.SetText(txtGeneratedKey.Text);
-        MessageBox.Show(
-            "API Key copied to clipboard!\n\nStore it securely - it won't be shown again.",
-            "Copied",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
-
+        NotificationService.ShowSuccess("Copied", "API Key copied to clipboard. Store it securely - it won't be shown again.", 5);
         pnlGeneratedKey.Visibility = Visibility.Collapsed;
     }
 
@@ -475,13 +577,13 @@ public partial class MainWindow : Window
             var apiKey = _apiKeys.FirstOrDefault(k => k.Id == id);
             if (apiKey == null) return;
 
-            var result = MessageBox.Show(
-                $"Are you sure you want to revoke the API Key '{apiKey.Name}'?\n\nApplications using this key will lose access.",
-                "Confirm Revoke",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
+            var confirmed = await DialogService.ConfirmDangerousAsync(
+                "Revoke API Key",
+                $"Are you sure you want to revoke the API Key '{apiKey.Name}'?\n\nApplications using this key will lose access immediately.",
+                "Revoke",
+                "Cancel");
 
-            if (result == MessageBoxResult.Yes)
+            if (confirmed)
             {
                 _apiKeys.Remove(apiKey);
                 await SaveApiKeysAsync();
@@ -495,6 +597,8 @@ public partial class MainWindow : Window
                 lstApiKeys.ItemsSource = _apiKeys;
 
                 UpdateStatusBar();
+                
+                NotificationService.ShowSuccess("Revoked", $"API Key '{apiKey.Name}' has been revoked.", 4);
             }
         }
     }

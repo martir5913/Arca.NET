@@ -280,6 +280,13 @@ public sealed class EmbeddedSecretServer : IDisposable
         switch (command)
         {
             case "GET" when parts.Length >= 3:
+                // Verificar permiso para acceder a este secreto
+                if (!HasPermissionToAccess(keyEntry, parts[2]))
+                {
+                    response = "ERROR|Access denied to this secret";
+                    LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "GET", parts[2], false, "Access denied - insufficient permissions");
+                    break;
+                }
                 response = HandleGet(parts[2]);
                 success = response.StartsWith("OK");
                 LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "GET", parts[2], success,
@@ -287,18 +294,29 @@ public sealed class EmbeddedSecretServer : IDisposable
                 break;
 
             case "EXISTS" when parts.Length >= 3:
+                // Verificar permiso para verificar este secreto
+                if (!HasPermissionToAccess(keyEntry, parts[2]))
+                {
+                    response = "FALSE"; // No revelar si existe o no
+                    LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "EXISTS", parts[2], false, "Access denied - insufficient permissions");
+                    break;
+                }
                 response = HandleExists(parts[2]);
                 success = true;
                 LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "EXISTS", parts[2], true, null);
                 break;
 
             case "LIST":
-                response = HandleList(parts.Length > 2 ? parts[2] : null);
-                LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "LIST", null, true, null);
-                break;
-
             case "KEYS":
-                response = HandleList(parts.Length > 2 ? parts[2] : null);
+                // Verificar si puede listar secretos
+                if (!CanListSecrets(keyEntry))
+                {
+                    response = "ERROR|Access denied - cannot list secrets";
+                    LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "LIST", null, false, "Access denied - cannot list secrets");
+                    break;
+                }
+                // Filtrar solo los secretos que tiene permiso de ver
+                response = HandleListWithPermissions(keyEntry, parts.Length > 2 ? parts[2] : null);
                 LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "LIST", null, true, null);
                 break;
 
@@ -309,6 +327,70 @@ public sealed class EmbeddedSecretServer : IDisposable
         }
 
         return response;
+    }
+
+    /// <summary>
+    /// Verifica si la API Key tiene permiso para acceder a un secreto específico.
+    /// </summary>
+    private bool HasPermissionToAccess(ApiKeyEntry keyEntry, string secretKey)
+    {
+        var permissions = keyEntry.Permissions;
+
+        // Full access permite todo
+        if (permissions.Level == AccessLevel.Full)
+            return true;
+
+        // Verificar en lista de secretos permitidos
+        if (permissions.AllowedSecrets.Any(s => 
+            s.Equals(secretKey, StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        // Verificar prefijos permitidos (ej: "ConnectionStrings:*" permite "ConnectionStrings:Database")
+        foreach (var prefix in permissions.AllowedPrefixes)
+        {
+            var prefixPattern = prefix.TrimEnd('*');
+            if (secretKey.StartsWith(prefixPattern, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Verifica si la API Key puede listar secretos.
+    /// </summary>
+    private bool CanListSecrets(ApiKeyEntry keyEntry)
+    {
+        return keyEntry.Permissions.CanList;
+    }
+
+    /// <summary>
+    /// Lista solo los secretos que la API Key tiene permiso de ver.
+    /// </summary>
+    private string HandleListWithPermissions(ApiKeyEntry keyEntry, string? filter)
+    {
+        var permissions = keyEntry.Permissions;
+        
+        IEnumerable<string> keys;
+
+        if (permissions.Level == AccessLevel.Full)
+        {
+            // Acceso completo - mostrar todos
+            keys = _secrets.Keys;
+        }
+        else
+        {
+            // Filtrar solo los secretos permitidos
+            keys = _secrets.Keys.Where(k => HasPermissionToAccess(keyEntry, k));
+        }
+
+        // Aplicar filtro adicional si se especificó
+        if (!string.IsNullOrWhiteSpace(filter))
+        {
+            keys = keys.Where(k => k.Contains(filter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return $"OK|{string.Join(",", keys)}";
     }
 
     private string ProcessUnauthenticatedCommand(string command, string[] parts)

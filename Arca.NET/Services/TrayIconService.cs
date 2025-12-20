@@ -97,7 +97,28 @@ public sealed class TrayIconService : IDisposable
         // Intentar cargar icono desde recursos
         try
         {
+            // Primero buscar logo_Arca.ico
             var iconPath = System.IO.Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory,
+                "logo_Arca.ico");
+
+            if (System.IO.File.Exists(iconPath))
+            {
+                return new Icon(iconPath);
+            }
+
+            // Luego buscar icon.ico en la raíz
+            iconPath = System.IO.Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory,
+                "icon.ico");
+
+            if (System.IO.File.Exists(iconPath))
+            {
+                return new Icon(iconPath);
+            }
+
+            // Luego buscar en carpeta Assets
+            iconPath = System.IO.Path.Combine(
                 AppDomain.CurrentDomain.BaseDirectory,
                 "Assets",
                 "icon.ico");

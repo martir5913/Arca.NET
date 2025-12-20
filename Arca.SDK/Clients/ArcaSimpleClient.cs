@@ -86,6 +86,8 @@ public sealed class ArcaSimpleClient : IArcaClient
             {
                 "OK" when parts.Length >= 2 => SecretResult.Found(parts[1], parts.Length > 2 ? parts[2] : null),
                 "NOTFOUND" => SecretResult.NotFound(key),
+                "ERROR" when parts.Length > 1 && parts[1].Contains("Access denied", StringComparison.OrdinalIgnoreCase) 
+                    => SecretResult.AccessDenied(key),
                 "ERROR" => SecretResult.Failed(parts.Length > 1 ? parts[1] : "Unknown error"),
                 _ => SecretResult.Failed(response)
             };
@@ -100,6 +102,9 @@ public sealed class ArcaSimpleClient : IArcaClient
     public async Task<string> GetSecretValueAsync(string key, CancellationToken cancellationToken = default)
     {
         var result = await GetSecretAsync(key, cancellationToken);
+
+        if (result.IsAccessDenied)
+            throw new ArcaAccessDeniedException(key, "GET");
 
         if (!result.Success)
             throw new ArcaSecretNotFoundException(key, result.Error);
@@ -145,9 +150,28 @@ public sealed class ArcaSimpleClient : IArcaClient
                 return parts[1].Split(',', StringSplitOptions.RemoveEmptyEntries);
             }
 
+            if (parts[0] == "OK" && (parts.Length < 2 || string.IsNullOrEmpty(parts[1])))
+            {
+                // OK pero sin secretos (lista vacía o sin permisos para ver ninguno)
+                return [];
+            }
+
             if (parts[0] == "ERROR")
             {
-                throw new ArcaException(parts.Length > 1 ? parts[1] : "Access denied");
+                var errorMessage = parts.Length > 1 ? parts[1] : "Unknown error";
+                
+                // Detectar error de acceso denegado
+                if (errorMessage.Contains("Access denied", StringComparison.OrdinalIgnoreCase) ||
+                    errorMessage.Contains("cannot list", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new ArcaAccessDeniedException(
+                        "Your API Key does not have permission to list secrets. " +
+                        "Contact your administrator to enable 'Can list available secrets' permission.",
+                        resource: null,
+                        operation: "LIST");
+                }
+                
+                throw new ArcaException(errorMessage);
             }
 
             return [];
@@ -159,7 +183,7 @@ public sealed class ArcaSimpleClient : IArcaClient
         catch (Exception ex)
         {
             Debug.WriteLine($"[ArcaSimpleClient] ListKeysAsync error: {ex.Message}");
-            return [];
+            throw new ArcaException($"Failed to list secrets: {ex.Message}", ex);
         }
     }
 

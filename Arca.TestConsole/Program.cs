@@ -92,18 +92,31 @@ Console.WriteLine();
 // ============================================
 Console.WriteLine("━━━ Secretos Disponibles ━━━");
 
-var keys = await arca.ListKeysAsync();
+try
+{
+    var keys = await arca.ListKeysAsync();
 
-if (keys.Count == 0)
-{
-    Console.WriteLine("   (No hay secretos guardados)");
-}
-else
-{
-    foreach (var key in keys)
+    if (keys.Count == 0)
     {
-        Console.WriteLine($"   🔑 {key}");
+        Console.WriteLine("   (No hay secretos disponibles para esta API Key)");
     }
+    else
+    {
+        foreach (var key in keys)
+        {
+            Console.WriteLine($"   🔑 {key}");
+        }
+    }
+}
+catch (ArcaAccessDeniedException)
+{
+    Console.WriteLine("   ⚠️  Tu API Key no tiene permiso para listar secretos.");
+    Console.WriteLine("   💡 Contacta al administrador para habilitar 'Can list available secrets'.");
+    Console.WriteLine("   📝 Aún puedes obtener secretos específicos si tienes permiso.");
+}
+catch (ArcaException ex)
+{
+    Console.WriteLine($"   ❌ Error al listar: {ex.Message}");
 }
 
 Console.WriteLine();
@@ -119,9 +132,14 @@ if (!string.IsNullOrWhiteSpace(secretName))
 {
     try
     {
-        // Método 1: GetSecretValueAsync (lanza excepción si no existe)
+        // Método 1: GetSecretValueAsync (lanza excepción si no existe o no tiene permiso)
         var secretValue = await arca.GetSecretValueAsync(secretName);
         Console.WriteLine($"✅ Valor: {secretValue}");
+    }
+    catch (ArcaAccessDeniedException)
+    {
+        Console.WriteLine($"🚫 Acceso denegado al secreto '{secretName}'.");
+        Console.WriteLine("   Tu API Key no tiene permiso para acceder a este secreto.");
     }
     catch (ArcaSecretNotFoundException)
     {
@@ -134,10 +152,11 @@ if (!string.IsNullOrWhiteSpace(secretName))
 
     Console.WriteLine();
 
-    // Método 2: GetSecretAsync (retorna resultado con Success/Error)
+    // Método 2: GetSecretAsync (retorna resultado con Success/Error/IsAccessDenied)
+    Console.WriteLine("Usando GetSecretAsync (sin excepciones):");
     var result = await arca.GetSecretAsync(secretName);
-    Console.WriteLine("Usando GetSecretAsync:");
     Console.WriteLine($"   Success: {result.Success}");
+    Console.WriteLine($"   IsAccessDenied: {result.IsAccessDenied}");
     Console.WriteLine($"   Value: {result.Value ?? "(null)"}");
     Console.WriteLine($"   Description: {result.Description ?? "(sin descripción)"}");
     Console.WriteLine($"   Error: {result.Error ?? "(ninguno)"}");
@@ -159,8 +178,15 @@ Console.WriteLine("using var arca = new ArcaSimpleClient(apiKey: apiKey);");
 Console.WriteLine();
 Console.WriteLine("if (await arca.IsAvailableAsync())");
 Console.WriteLine("{");
-Console.WriteLine("    var connectionString = await arca.GetSecretValueAsync(\"ConnectionStrings:Database\");");
-Console.WriteLine("    // Usar connectionString...");
+Console.WriteLine("    try");
+Console.WriteLine("    {");
+Console.WriteLine("        var connectionString = await arca.GetSecretValueAsync(\"ConnectionStrings:Database\");");
+Console.WriteLine("        // Usar connectionString...");
+Console.WriteLine("    }");
+Console.WriteLine("    catch (ArcaAccessDeniedException)");
+Console.WriteLine("    {");
+Console.WriteLine("        // Tu API Key no tiene permiso para este secreto");
+Console.WriteLine("    }");
 Console.WriteLine("}");
 Console.WriteLine("```");
 

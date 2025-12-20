@@ -17,6 +17,26 @@ public class ArcaSecretNotFoundException : ArcaException
     }
 }
 
+public class ArcaAccessDeniedException : ArcaException
+{
+    public string? Resource { get; }
+    public string? Operation { get; }
+
+    public ArcaAccessDeniedException(string message, string? resource = null, string? operation = null)
+        : base(message)
+    {
+        Resource = resource;
+        Operation = operation;
+    }
+
+    public ArcaAccessDeniedException(string? resource, string? operation)
+        : base($"Access denied{(operation != null ? $" for operation '{operation}'" : "")}{(resource != null ? $" on resource '{resource}'" : "")}. Check your API Key permissions.")
+    {
+        Resource = resource;
+        Operation = operation;
+    }
+}
+
 public class ArcaVaultLockedException : ArcaException
 {
     public ArcaVaultLockedException()
