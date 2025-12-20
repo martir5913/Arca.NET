@@ -1,6 +1,7 @@
 ﻿using Arca.Core.Entities;
 using Arca.Core.Interfaces;
 using Arca.Core.Security;
+using Arca.Core.Services;
 using Arca.NET.Controls;
 using Arca.NET.Models;
 using Arca.NET.Services;
@@ -641,6 +642,223 @@ public partial class MainWindow : Window
     private void CloseAuditLogButton_Click(object sender, RoutedEventArgs e)
     {
         pnlAuditLog.Visibility = Visibility.Collapsed;
+    }
+
+    #endregion
+
+    #region Backup (Export/Import)
+
+    private readonly VaultExportService _exportService = new();
+
+    private void BackupButton_Click(object sender, RoutedEventArgs e)
+    {
+        txtExportPassword.Password = "";
+        txtExportPasswordConfirm.Password = "";
+        txtImportPassword.Password = "";
+        chkOverwriteExisting.IsChecked = false;
+        chkImportApiKeys.IsChecked = true;
+        pnlBackup.Visibility = Visibility.Visible;
+    }
+
+    private void CloseBackupButton_Click(object sender, RoutedEventArgs e)
+    {
+        pnlBackup.Visibility = Visibility.Collapsed;
+    }
+
+    private async void ExportVaultButton_Click(object sender, RoutedEventArgs e)
+    {
+        var password = txtExportPassword.Password;
+        var confirmPassword = txtExportPasswordConfirm.Password;
+
+        // Validaciones
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            NotificationService.ShowWarning("Validation", "Please enter an export password.");
+            return;
+        }
+
+        if (password.Length < 8)
+        {
+            NotificationService.ShowWarning("Validation", "Export password must be at least 8 characters.");
+            return;
+        }
+
+        if (password != confirmPassword)
+        {
+            NotificationService.ShowWarning("Validation", "Passwords do not match.");
+            return;
+        }
+
+        // Seleccionar archivo de destino
+        var saveDialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Export Vault",
+            Filter = "Arca Vault Backup (*.arcavault)|*.arcavault",
+            DefaultExt = ".arcavault",
+            FileName = $"arca-backup-{DateTime.Now:yyyy-MM-dd}"
+        };
+
+        if (saveDialog.ShowDialog() != true)
+            return;
+
+        try
+        {
+            await _exportService.ExportAsync(_secrets, _apiKeys, password, saveDialog.FileName);
+            
+            NotificationService.ShowSuccess("Export Complete", 
+                $"Vault exported successfully.\n{_secrets.Count} secrets, {_apiKeys.Count} API Keys.", 5);
+            
+            pnlBackup.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError("Export Failed", $"Failed to export vault: {ex.Message}");
+        }
+    }
+
+    private async void ImportVaultButton_Click(object sender, RoutedEventArgs e)
+    {
+        var password = txtImportPassword.Password;
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            NotificationService.ShowWarning("Validation", "Please enter the import password.");
+            return;
+        }
+
+        // Seleccionar archivo
+        var openDialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Import Vault",
+            Filter = "Arca Vault Backup (*.arcavault)|*.arcavault",
+            DefaultExt = ".arcavault"
+        };
+
+        if (openDialog.ShowDialog() != true)
+            return;
+
+        try
+        {
+            // Verificar que sea un archivo válido
+            if (!await _exportService.IsValidExportFileAsync(openDialog.FileName))
+            {
+                NotificationService.ShowError("Invalid File", "The selected file is not a valid Arca vault backup.");
+                return;
+            }
+
+            // Cargar datos
+            var exportData = await _exportService.LoadExportFileAsync(openDialog.FileName, password);
+            if (exportData == null)
+            {
+                NotificationService.ShowError("Import Failed", "Failed to read the backup file.");
+                return;
+            }
+
+            var overwrite = chkOverwriteExisting.IsChecked == true;
+            var importApiKeys = chkImportApiKeys.IsChecked == true;
+
+            int secretsImported = 0, secretsSkipped = 0;
+            int apiKeysImported = 0, apiKeysSkipped = 0;
+
+            // Importar secretos
+            foreach (var secret in exportData.Secrets)
+            {
+                var existing = _secrets.FirstOrDefault(s => s.Key.Equals(secret.Key, StringComparison.OrdinalIgnoreCase));
+                
+                if (existing != null)
+                {
+                    if (overwrite)
+                    {
+                        var index = _secrets.IndexOf(existing);
+                        _secrets[index] = existing with
+                        {
+                            Value = secret.Value,
+                            Description = secret.Description,
+                            ModifiedAt = DateTime.UtcNow
+                        };
+                        secretsImported++;
+                    }
+                    else
+                    {
+                        secretsSkipped++;
+                    }
+                }
+                else
+                {
+                    _secrets.Add(new SecretEntry(
+                        Guid.NewGuid(),
+                        secret.Key,
+                        secret.Value,
+                        secret.Description,
+                        DateTime.UtcNow,
+                        null));
+                    secretsImported++;
+                }
+            }
+
+            // Importar API Keys (sin el hash, solo como referencia)
+            if (importApiKeys)
+            {
+                foreach (var apiKey in exportData.ApiKeys)
+                {
+                    var existing = _apiKeys.FirstOrDefault(k => k.Name.Equals(apiKey.Name, StringComparison.OrdinalIgnoreCase));
+                    
+                    if (existing != null)
+                    {
+                        apiKeysSkipped++;
+                    }
+                    else
+                    {
+                        // Crear API Key inactiva (necesita regenerarse)
+                        var level = Enum.TryParse<AccessLevel>(apiKey.AccessLevel, out var parsed) 
+                            ? parsed 
+                            : AccessLevel.Restricted;
+                        
+                        var permissions = new ApiKeyPermissions(
+                            level,
+                            apiKey.AllowedSecrets,
+                            [],
+                            apiKey.CanList);
+
+                        _apiKeys.Add(new ApiKeyEntry(
+                            Guid.NewGuid(),
+                            $"{apiKey.Name} (imported)",
+                            "", // Sin hash - necesita regenerarse
+                            apiKey.Description,
+                            DateTime.UtcNow,
+                            null,
+                            false, // Inactiva
+                            permissions));
+                        apiKeysImported++;
+                    }
+                }
+            }
+
+            // Guardar cambios
+            await SaveSecretsAsync();
+            await SaveApiKeysAsync();
+
+            UpdateSecretCount();
+            RefreshList();
+
+            var message = $"Imported: {secretsImported} secrets";
+            if (secretsSkipped > 0) message += $", {secretsSkipped} skipped";
+            if (importApiKeys) message += $"\nAPI Keys: {apiKeysImported} imported";
+            if (apiKeysSkipped > 0) message += $", {apiKeysSkipped} skipped";
+            message += $"\n\nFrom: {exportData.ExportedFrom} ({exportData.ExportedAt:g})";
+
+            NotificationService.ShowSuccess("Import Complete", message, 8);
+            
+            pnlBackup.Visibility = Visibility.Collapsed;
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("password"))
+        {
+            NotificationService.ShowError("Wrong Password", "The password is incorrect or the file is corrupted.");
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError("Import Failed", $"Failed to import vault: {ex.Message}");
+        }
     }
 
     #endregion

@@ -166,4 +166,34 @@ public partial class App : Application
         e.Cancel = true;
         MinimizeToTray();
     }
+
+    /// <summary>
+    /// Abre un vault desde una ruta específica.
+    /// </summary>
+    public void OpenVaultFromPath(string vaultPath)
+    {
+        // Cerrar ventanas actuales
+        if (_mainWindow != null)
+        {
+            _mainWindow.Closing -= OnMainWindowClosing;
+            _mainWindow.Close();
+            _mainWindow = null;
+        }
+
+        if (_loginWindow != null)
+        {
+            _loginWindow.Closing -= OnLoginWindowClosing;
+            _loginWindow.Close();
+            _loginWindow = null;
+        }
+
+        // Crear nueva ventana de login con el vault especificado
+        _loginWindow = new LoginWindow(vaultPath);
+        _loginWindow.Closing += OnLoginWindowClosing;
+        _loginWindow.Show();
+        _loginWindow.Activate();
+
+        IsVaultUnlocked = false;
+        _trayIcon?.UpdateStatus(false, 0);
+    }
 }
