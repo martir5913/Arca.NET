@@ -1,37 +1,37 @@
-# Arca.NET
+ï»¿# Arca.NET
 
 <p align="center">
   <strong>Gestor de secretos seguro y local para aplicaciones .NET</strong>
 </p>
 
 <p align="center">
-  <a href="#características">Características</a> •
-  <a href="#instalación">Instalación</a> •
-  <a href="#sdk">SDK</a> •
-  <a href="#decisiones-técnicas">ADR</a> •
+  <a href="#caracterÃ­sticas">CaracterÃ­sticas</a> â€¢
+  <a href="#instalaciÃ³n">InstalaciÃ³n</a> â€¢
+  <a href="#sdk">SDK</a> â€¢
+  <a href="#decisiones-tÃ©cnicas">ADR</a> â€¢
   <a href="#licencia">Licencia</a>
 </p>
 
 ---
 
-## ¿Qué es Arca.NET?
+## Â¿QuÃ© es Arca.NET?
 
 Gestor de secretos **100% local** para Windows. Almacena credenciales, API keys y connection strings de forma cifrada, accesibles via SDK para tus aplicaciones .NET.
 
-| Problema | Solución |
+| Problema | SoluciÃ³n |
 |----------|----------|
-| Credenciales en código fuente | Vault cifrado externo |
+| Credenciales en cÃ³digo fuente | Vault cifrado externo |
 | Sin control de acceso | API Keys con permisos granulares |
-| Sin auditoría | Log de cada acceso |
+| Sin auditorÃ­a | Log de cada acceso |
 | Dependencia cloud | Local, <1ms latencia |
 
 ---
 
-## Características
+## CaracterÃ­sticas
 
 - ?? **AES-256-GCM** + **Argon2id** para cifrado
 - ?? **API Keys** con permisos por secreto
-- ?? **Auditoría** completa de accesos
+- ?? **AuditorÃ­a** completa de accesos
 - ?? **Export/Import** entre servidores
 - ? **Named Pipes** (<1ms latencia)
 - ?? **System Tray** (segundo plano)
@@ -40,7 +40,7 @@ Gestor de secretos **100% local** para Windows. Almacena credenciales, API keys 
 
 ## Casos de Uso
 
-### Servidor con múltiples aplicaciones
+### Servidor con mÃºltiples aplicaciones
 
 ```
 ??????????????????????????????????????????????????
@@ -54,7 +54,7 @@ Gestor de secretos **100% local** para Windows. Almacena credenciales, API keys 
 ??????????????????????????????????????????????????
 ```
 
-### Múltiples servidores
+### MÃºltiples servidores
 
 ```
 Servidor SAP              Servidor Automatizaciones
@@ -63,9 +63,9 @@ Servidor SAP              Servidor Automatizaciones
 
 ---
 
-## Instalación
+## InstalaciÃ³n
 
-**Requisitos:** Windows 10+ / Server 2016+ • .NET 10
+**Requisitos:** Windows 10+ / Server 2016+ â€¢ .NET 10
 
 ```powershell
 git clone https://github.com/martir5913/Arca.NET.git
@@ -73,20 +73,20 @@ cd Arca.NET
 dotnet run --project Arca.NET
 ```
 
-### Ubicación del Vault
+### UbicaciÃ³n del Vault
 
 ```
 %LOCALAPPDATA%\Arca\
 ??? vault.vlt      # Secretos cifrados
 ??? vault.keys     # API Keys
-??? Logs\          # Auditoría
+??? Logs\          # AuditorÃ­a
 ```
 
 ---
 
 ## SDK
 
-### Instalación
+### InstalaciÃ³n
 
 ```bash
 dotnet add package Arca.SDK
@@ -116,20 +116,20 @@ catch (ArcaAccessDeniedException) { /* Sin permiso */ }
 catch (ArcaSecretNotFoundException) { /* No existe */ }
 ```
 
-?? **Documentación completa:** [Arca.SDK/README.md](Arca.SDK/README.md)
+?? **DocumentaciÃ³n completa:** [Arca.SDK/README.md](Arca.SDK/README.md)
 
 ---
 
-## Decisiones Técnicas (ADR)
+## Decisiones TÃ©cnicas (ADR)
 
-| Decisión | Justificación |
+| DecisiÃ³n | JustificaciÃ³n |
 |----------|---------------|
-| **AES-256-GCM** | AEAD: cifrado + autenticación en una operación |
+| **AES-256-GCM** | AEAD: cifrado + autenticaciÃ³n en una operaciÃ³n |
 | **Argon2id** | Memory-hard, resistente a GPU/ASIC (OWASP recommended) |
-| **Named Pipes** | Solo local, <1ms, sin configuración de red |
-| **API Keys granulares** | Mínimo privilegio, revocación sin afectar otras apps |
-| **Formato binario** | Validación rápida, versionado, mínimo overhead |
-| **100% local** | Sin telemetría, funciona air-gapped |
+| **Named Pipes** | Solo local, <1ms, sin configuraciÃ³n de red |
+| **API Keys granulares** | MÃ­nimo privilegio, revocaciÃ³n sin afectar otras apps |
+| **Formato binario** | ValidaciÃ³n rÃ¡pida, versionado, mÃ­nimo overhead |
+| **100% local** | Sin telemetrÃ­a, funciona air-gapped |
 
 ---
 
@@ -153,8 +153,8 @@ Arca.NET/
 | ? Permitido | ? No permitido |
 |--------------|-----------------|
 | Uso personal | Venta |
-| Uso interno corporativo | Redistribución comercial |
-| Modificación propia | Sublicenciar |
+| Uso interno corporativo | RedistribuciÃ³n comercial |
+| ModificaciÃ³n propia | Sublicenciar |
 
 **Archivo:** [LICENSE](LICENSE)
 
@@ -162,15 +162,15 @@ Arca.NET/
 
 ## Roadmap v2.0
 
-- Expiración de API Keys
-- Backup automático
-- Tags/Categorías
+- ExpiraciÃ³n de API Keys
+- Backup automÃ¡tico
+- Tags/CategorÃ­as
 - gRPC remoto (mTLS)
 
 ---
 
 <p align="center">
-  <b>Autor:</b> Martir_Dev • 
-  <b>GitHub:</b> <a href="https://github.com/martir5913/Arca.NET">martir5913/Arca.NET</a> • 
+  <b>Autor:</b> Martir_Dev â€¢ 
+  <b>GitHub:</b> <a href="https://github.com/martir5913/Arca.NET">martir5913/Arca.NET</a> â€¢ 
   <b>Email:</b> martir.dev@gmail.com
 </p>

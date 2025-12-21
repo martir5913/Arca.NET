@@ -1,8 +1,8 @@
-# Changelog
+ï»¿# Changelog
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
-El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/),
+El formato estÃ¡ basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [1.0.0] - 2025-01-XX
@@ -11,48 +11,48 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 #### Seguridad
 - Cifrado AES-256-GCM para todos los secretos
-- Derivación de clave con Argon2id (64MB, 3 iteraciones)
+- DerivaciÃ³n de clave con Argon2id (64MB, 3 iteraciones)
 - API Keys con hash SHA256 (nunca se almacena la key original)
 - Sistema de permisos granulares (Full Access / Restricted)
-- Protección anti-fuerza bruta (5 intentos, 5 min lockout)
-- Protección contra fuga de información en operación EXISTS
-- Advertencia en modo sin autenticación
+- ProtecciÃ³n anti-fuerza bruta (5 intentos, 5 min lockout)
+- ProtecciÃ³n contra fuga de informaciÃ³n en operaciÃ³n EXISTS
+- Advertencia en modo sin autenticaciÃ³n
 
 #### Funcionalidad Core
 - Vault cifrado con formato binario personalizado
-- Gestión de secretos (crear, editar, eliminar)
-- Gestión de API Keys con permisos por secreto
-- Auditoría completa de todos los accesos
-- Comunicación via Named Pipes (<1ms latencia)
+- GestiÃ³n de secretos (crear, editar, eliminar)
+- GestiÃ³n de API Keys con permisos por secreto
+- AuditorÃ­a completa de todos los accesos
+- ComunicaciÃ³n via Named Pipes (<1ms latencia)
 
 #### Interfaz de Usuario
-- Aplicación WPF con tema oscuro moderno
+- AplicaciÃ³n WPF con tema oscuro moderno
 - Sistema de notificaciones personalizado
-- Diálogos de confirmación integrados
-- Ejecución en System Tray (segundo plano)
-- Abrir vault existente desde cualquier ubicación
+- DiÃ¡logos de confirmaciÃ³n integrados
+- EjecuciÃ³n en System Tray (segundo plano)
+- Abrir vault existente desde cualquier ubicaciÃ³n
 
 #### Export/Import
 - Exportar vault a archivo `.arcavault` cifrado
-- Importar con opción de merge o sobrescribir
-- Compatibilidad hacia atrás (v1 PBKDF2 ? v2 Argon2id)
+- Importar con opciÃ³n de merge o sobrescribir
+- Compatibilidad hacia atrÃ¡s (v1 PBKDF2 ? v2 Argon2id)
 
 #### SDK
-- `ArcaSimpleClient` para integración en aplicaciones .NET
+- `ArcaSimpleClient` para integraciÃ³n en aplicaciones .NET
 - Interfaz `IArcaClient` para dependency injection
-- Manejo de errores con excepciones específicas:
+- Manejo de errores con excepciones especÃ­ficas:
   - `ArcaAccessDeniedException`
   - `ArcaSecretNotFoundException`
   - `ArcaException`
-- Documentación completa en README
+- DocumentaciÃ³n completa en README
 
 ### Seguridad
 
 - **Cifrado:** AES-256-GCM
 - **KDF:** Argon2id (OWASP recommended)
 - **Hash API Keys:** SHA256
-- **Comunicación:** Named Pipes (solo local)
-- **Auditoría:** Logging de todas las operaciones
+- **ComunicaciÃ³n:** Named Pipes (solo local)
+- **AuditorÃ­a:** Logging de todas las operaciones
 
 ### Arquitectura
 
@@ -69,11 +69,11 @@ Arca.Daemon         ? Windows Service (opcional)
 ## [Unreleased] - v2.0
 
 ### Planificado
-- Expiración de API Keys
-- Backup automático del vault
-- Tags/Categorías para organizar secretos
+- ExpiraciÃ³n de API Keys
+- Backup automÃ¡tico del vault
+- Tags/CategorÃ­as para organizar secretos
 - gRPC como alternativa para acceso remoto (con mTLS)
 
-### En evaluación
+### En evaluaciÃ³n
 - Soporte multiplataforma (Avalonia)
-- Sincronización entre vaults
+- SincronizaciÃ³n entre vaults
