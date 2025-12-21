@@ -1,12 +1,11 @@
-﻿using Arca.Daemon.Services;
+﻿using Arca.Core.Common;
+using Arca.Daemon.Services;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 
 namespace Arca.Daemon;
 
 public class Program
 {
-    public const string PipeName = "arca-vault";
-
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
@@ -14,7 +13,7 @@ public class Program
         // Configure Kestrel to use Named Pipes for gRPC IPC
         builder.WebHost.ConfigureKestrel(options =>
         {
-            options.ListenNamedPipe(PipeName, listenOptions =>
+            options.ListenNamedPipe(ArcaConstants.PipeName, listenOptions =>
             {
                 listenOptions.Protocols = HttpProtocols.Http2;
             });

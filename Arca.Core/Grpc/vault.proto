@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+option csharp_namespace = "Arca.Grpc";
+
+package arca;
+
+// Servicio principal del Vault
+service VaultService {
+  // Verifica si el vault está desbloqueado
+  rpc GetStatus (StatusRequest) returns (StatusResponse);
+  
+  // Obtiene un secreto por su clave
+  rpc GetSecret (GetSecretRequest) returns (GetSecretResponse);
+  
+  // Obtiene múltiples secretos por sus claves
+  rpc GetSecrets (GetSecretsRequest) returns (GetSecretsResponse);
+  
+  // Lista todas las claves disponibles (sin valores)
+  rpc ListKeys (ListKeysRequest) returns (ListKeysResponse);
+  
+  // Verifica si una clave existe
+  rpc KeyExists (KeyExistsRequest) returns (KeyExistsResponse);
+}
+
+// === Status ===
+message StatusRequest {}
+
+message StatusResponse {
+  bool is_unlocked = 1;
+  string vault_path = 2;
+  int32 secret_count = 3;
+}
+
+// === Get Secret ===
+message GetSecretRequest {
+  string key = 1;
+}
+
+message GetSecretResponse {
+  bool found = 1;
+  string key = 2;
+  string value = 3;
+  string description = 4;
+  string error = 5;
+}
+
+// === Get Multiple Secrets ===
+message GetSecretsRequest {
+  repeated string keys = 1;
+}
+
+message GetSecretsResponse {
+  repeated SecretEntry secrets = 1;
+  repeated string not_found_keys = 2;
+  string error = 3;
+}
+
+message SecretEntry {
+  string key = 1;
+  string value = 2;
+  string description = 3;
+}
+
+// === List Keys ===
+message ListKeysRequest {
+  string filter = 1; // Filtro opcional (búsqueda parcial)
+}
+
+message ListKeysResponse {
+  repeated string keys = 1;
+  string error = 2;
+}
+
+// === Key Exists ===
+message KeyExistsRequest {
+  string key = 1;
+}
+
+message KeyExistsResponse {
+  bool exists = 1;
+}
