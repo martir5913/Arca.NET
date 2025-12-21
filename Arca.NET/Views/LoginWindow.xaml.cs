@@ -20,6 +20,12 @@ public partial class LoginWindow : Window
     private readonly IAesGcmService _aesGcmService;
     private readonly string? _customVaultPath;
 
+    // Rate limiting para prevenir fuerza bruta
+    private const int MaxFailedAttempts = 5;
+    private const int LockoutMinutes = 5;
+    private int _failedAttempts = 0;
+    private DateTime _lockoutUntil = DateTime.MinValue;
+
     public byte[]? DerivedKey { get; private set; }
 
     public LoginWindow() : this(null)
@@ -87,6 +93,14 @@ public partial class LoginWindow : Window
             return;
         }
 
+        // Verificar si está bloqueado por fuerza bruta
+        if (_failedAttempts >= MaxFailedAttempts && DateTime.UtcNow < _lockoutUntil)
+        {
+            var remainingLockout = _lockoutUntil - DateTime.UtcNow;
+            ShowError(ErrorMessage, $"Too many failed attempts. Please try again in {remainingLockout.TotalMinutes} minutes.");
+            return;
+        }
+
         ShowLoading("Unlocking vault...");
 
         try
@@ -108,6 +122,7 @@ public partial class LoginWindow : Window
 
             // Success - store key and open main window via App
             DerivedKey = derivedKey;
+            _failedAttempts = 0; // Reset failed attempts on success
             HideLoading();
 
             // Usar App para abrir MainWindow
@@ -118,10 +133,20 @@ public partial class LoginWindow : Window
         }
         catch (System.Security.Cryptography.AuthenticationTagMismatchException)
         {
-            HideLoading();
-            ShowError(ErrorMessage, "Invalid password. Please try again.");
+            _failedAttempts++; // Incrementar contador de intentos fallidos
+            if (_failedAttempts >= MaxFailedAttempts)
+            {
+                // Bloquear temporalmente el acceso
+                _lockoutUntil = DateTime.UtcNow.AddMinutes(LockoutMinutes);
+                ShowError(ErrorMessage, $"Too many failed attempts. Please try again in {LockoutMinutes} minutes.");
+            }
+            else
+            {
+                ShowError(ErrorMessage, "Invalid password. Please try again.");
+            }
             PasswordBox.Clear();
             PasswordBox.Focus();
+            HideLoading();
         }
         catch (Exception ex)
         {

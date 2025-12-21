@@ -103,7 +103,18 @@ public sealed class EmbeddedSecretServer : IDisposable
         _serverTask = Task.Run(() => RunServerLoopAsync(_cts.Token));
 
         Debug.WriteLine($"[EmbeddedSecretServer] Server started on pipe: {_pipeName}");
-        Debug.WriteLine($"[EmbeddedSecretServer] Authentication required: {RequireAuthentication}");
+        
+        if (!RequireAuthentication)
+        {
+            Debug.WriteLine("[EmbeddedSecretServer] ?? WARNING: Authentication is DISABLED. Any application can access secrets.");
+            Debug.WriteLine("[EmbeddedSecretServer] ?? This should only be used for development purposes.");
+            // Log de auditoría para modo inseguro
+            LogAudit("SYSTEM", "", "SERVER_START", null, true, "WARNING: Server started WITHOUT authentication");
+        }
+        else
+        {
+            Debug.WriteLine($"[EmbeddedSecretServer] Authentication required: {_apiKeys.Count} API Keys configured");
+        }
     }
 
     public void Stop()

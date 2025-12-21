@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Arca.Core.Entities;
+using Konscious.Security.Cryptography;
 
 namespace Arca.Core.Services;
 
@@ -81,22 +82,20 @@ public sealed class ImportResult
 
 /// <summary>
 /// Servicio para exportar e importar vaults.
+/// Usa Argon2id para derivación de claves (consistente con el vault principal).
 /// </summary>
 public sealed class VaultExportService
 {
     private const string MagicHeader = "ARCAEXPORT";
-    private const int CurrentVersion = 1;
+    private const int CurrentVersion = 2; // Version 2 usa Argon2id
     private const int SaltSize = 16;
     private const int KeySize = 32;
-    private const int Iterations = 100000;
+    
+    // Parámetros Argon2id (consistentes con KeyDerivationService)
+    private const int Argon2Parallelism = 4;
+    private const int Argon2MemorySize = 65536; // 64 MB
+    private const int Argon2Iterations = 3;
 
-    /// <summary>
-    /// Exporta los secretos y API Keys a un archivo cifrado.
-    /// </summary>
-    /// <param name="secrets">Secretos a exportar</param>
-    /// <param name="apiKeys">API Keys a exportar</param>
-    /// <param name="exportPassword">Contraseña para cifrar el archivo de exportación</param>
-    /// <param name="filePath">Ruta donde guardar el archivo</param>
     public async Task ExportAsync(
         IEnumerable<SecretEntry> secrets,
         IEnumerable<ApiKeyEntry> apiKeys,
@@ -106,7 +105,6 @@ public sealed class VaultExportService
         ArgumentException.ThrowIfNullOrWhiteSpace(exportPassword);
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
-        // Preparar datos de exportación
         var exportData = new VaultExportData
         {
             Version = CurrentVersion,
@@ -130,11 +128,7 @@ public sealed class VaultExportService
             }).ToList()
         };
 
-        // Serializar a JSON
-        var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(exportData, new JsonSerializerOptions
-        {
-            WriteIndented = false
-        });
+        var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(exportData, new JsonSerializerOptions { WriteIndented = false });
 
         // Comprimir
         using var compressedStream = new MemoryStream();
@@ -144,9 +138,9 @@ public sealed class VaultExportService
         }
         var compressedData = compressedStream.ToArray();
 
-        // Generar salt y derivar clave
+        // Generar salt y derivar clave con Argon2id
         var salt = RandomNumberGenerator.GetBytes(SaltSize);
-        var key = DeriveKey(exportPassword, salt);
+        var key = DeriveKeyArgon2id(exportPassword, salt);
 
         // Cifrar con AES-GCM
         var nonce = RandomNumberGenerator.GetBytes(12);
@@ -160,7 +154,6 @@ public sealed class VaultExportService
         await using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write);
         await using var writer = new BinaryWriter(fileStream);
 
-        // Header
         writer.Write(Encoding.ASCII.GetBytes(MagicHeader));
         writer.Write(CurrentVersion);
         writer.Write(salt);
@@ -170,12 +163,6 @@ public sealed class VaultExportService
         writer.Write(ciphertext);
     }
 
-    /// <summary>
-    /// Importa secretos desde un archivo de exportación.
-    /// </summary>
-    /// <param name="filePath">Ruta del archivo a importar</param>
-    /// <param name="exportPassword">Contraseña del archivo de exportación</param>
-    /// <returns>Datos importados o null si falla</returns>
     public async Task<VaultExportData?> LoadExportFileAsync(string filePath, string exportPassword)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
@@ -187,24 +174,25 @@ public sealed class VaultExportService
         await using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
         using var reader = new BinaryReader(fileStream);
 
-        // Verificar header
         var magic = Encoding.ASCII.GetString(reader.ReadBytes(MagicHeader.Length));
         if (magic != MagicHeader)
             throw new InvalidDataException("Invalid export file format.");
 
         var version = reader.ReadInt32();
         if (version > CurrentVersion)
-            throw new InvalidDataException($"Export file version {version} is not supported. Maximum supported: {CurrentVersion}");
+            throw new InvalidDataException($"Export file version {version} is not supported.");
 
-        // Leer datos de cifrado
         var salt = reader.ReadBytes(SaltSize);
         var nonce = reader.ReadBytes(12);
         var tag = reader.ReadBytes(16);
         var ciphertextLength = reader.ReadInt32();
         var ciphertext = reader.ReadBytes(ciphertextLength);
 
-        // Derivar clave y descifrar
-        var key = DeriveKey(exportPassword, salt);
+        // Derivar clave (Argon2id para v2, PBKDF2 para v1)
+        var key = version >= 2 
+            ? DeriveKeyArgon2id(exportPassword, salt)
+            : DeriveKeyPbkdf2Legacy(exportPassword, salt);
+
         var plaintext = new byte[ciphertext.Length];
 
         try
@@ -225,14 +213,10 @@ public sealed class VaultExportService
             await gzip.CopyToAsync(decompressedStream);
         }
 
-        // Deserializar
         var jsonBytes = decompressedStream.ToArray();
         return JsonSerializer.Deserialize<VaultExportData>(jsonBytes);
     }
 
-    /// <summary>
-    /// Valida si un archivo es un export válido de Arca.
-    /// </summary>
     public async Task<bool> IsValidExportFileAsync(string filePath)
     {
         if (!File.Exists(filePath))
@@ -242,7 +226,6 @@ public sealed class VaultExportService
         {
             await using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
             using var reader = new BinaryReader(fileStream);
-
             var magic = Encoding.ASCII.GetString(reader.ReadBytes(MagicHeader.Length));
             return magic == MagicHeader;
         }
@@ -252,13 +235,21 @@ public sealed class VaultExportService
         }
     }
 
-    private static byte[] DeriveKey(string password, byte[] salt)
+    private static byte[] DeriveKeyArgon2id(string password, byte[] salt)
     {
-        return Rfc2898DeriveBytes.Pbkdf2(
-            password,
-            salt,
-            Iterations,
-            HashAlgorithmName.SHA256,
-            KeySize);
+        using var argon2 = new Argon2id(Encoding.UTF8.GetBytes(password))
+        {
+            Salt = salt,
+            DegreeOfParallelism = Argon2Parallelism,
+            MemorySize = Argon2MemorySize,
+            Iterations = Argon2Iterations
+        };
+        return argon2.GetBytes(KeySize);
+    }
+
+    // Mantener compatibilidad con archivos v1 exportados con PBKDF2
+    private static byte[] DeriveKeyPbkdf2Legacy(string password, byte[] salt)
+    {
+        return Rfc2898DeriveBytes.Pbkdf2(password, salt, 100000, HashAlgorithmName.SHA256, KeySize);
     }
 }
