@@ -1,4 +1,4 @@
-﻿# Arca.NET
+# Arca.NET
 
 <p align="center">
   <strong>Gestor de secretos seguro y local para aplicaciones .NET</strong>
@@ -29,12 +29,12 @@ Gestor de secretos **100% local** para Windows. Almacena credenciales, API keys 
 
 ## Características
 
-- ?? **AES-256-GCM** + **Argon2id** para cifrado
-- ?? **API Keys** con permisos por secreto
-- ?? **Auditoría** completa de accesos
-- ?? **Export/Import** entre servidores
-- ? **Named Pipes** (<1ms latencia)
-- ?? **System Tray** (segundo plano)
+- **AES-256-GCM** + **Argon2id** para cifrado
+- **API Keys** con permisos por secreto
+- **Auditoría** completa de accesos
+- **Export/Import** entre servidores
+- **Named Pipes** (<1ms latencia)
+- **System Tray** (segundo plano)
 
 ---
 
@@ -43,22 +43,22 @@ Gestor de secretos **100% local** para Windows. Almacena credenciales, API keys 
 ### Servidor con múltiples aplicaciones
 
 ```
-??????????????????????????????????????????????????
-?              Servidor Windows                   ?
-?                                                ?
-?  Arca.NET ??? vault.vlt (cifrado)              ?
-?     ?                                          ?
-?     ???? SAP App    (API Key: solo SAP_*)      ?
-?     ???? Web API    (API Key: solo DB_*)       ?
-?     ???? Worker     (API Key: solo SMTP_*)     ?
-??????????????????????????????????????????????????
++------------------------------------------------+
+¦              Servidor Windows                  ¦
+¦                                                ¦
+¦  Arca.NET --> vault.vlt (cifrado)              ¦
+¦     ¦                                          ¦
+¦     +-- SAP App    (API Key: solo SAP_*)       ¦
+¦     +-- Web API    (API Key: solo DB_*)        ¦
+¦     +-- Worker     (API Key: solo SMTP_*)      ¦
++------------------------------------------------+
 ```
 
 ### Múltiples servidores
 
 ```
 Servidor SAP              Servidor Automatizaciones
-   vault.vlt    ??Export/Import???    vault.vlt
+   vault.vlt    --Export/Import--?    vault.vlt
 ```
 
 ---
@@ -77,9 +77,9 @@ dotnet run --project Arca.NET
 
 ```
 %LOCALAPPDATA%\Arca\
-??? vault.vlt      # Secretos cifrados
-??? vault.keys     # API Keys
-??? Logs\          # Auditoría
++-- vault.vlt      # Secretos cifrados
++-- vault.keys     # API Keys
++-- Logs\          # Auditoría
 ```
 
 ---
@@ -137,11 +137,11 @@ catch (ArcaSecretNotFoundException) { /* No existe */ }
 
 ```
 Arca.NET/
-??? Arca.Core/           # Entidades, interfaces
-??? Arca.Infrastructure/ # Cifrado, persistencia
-??? Arca.SDK/            # Cliente para apps externas
-??? Arca.NET/            # UI WPF + servidor
-??? Arca.Daemon/         # Windows Service (opcional)
++-- Arca.Core/           # Entidades, interfaces
++-- Arca.Infrastructure/ # Cifrado, persistencia
++-- Arca.SDK/            # Cliente para apps externas
++-- Arca.NET/            # UI WPF + servidor
++-- Arca.Daemon/         # Windows Service (opcional)
 ```
 
 ---
