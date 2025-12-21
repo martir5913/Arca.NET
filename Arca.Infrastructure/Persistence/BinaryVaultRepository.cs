@@ -17,11 +17,13 @@ public sealed class BinaryVaultRepository : IVaultRepository
 
     private readonly IAesGcmService _aesGcmService;
     private readonly string _vaultPath;
+    private readonly string _apiKeysPath;
 
     public BinaryVaultRepository(IAesGcmService aesGcmService, string? vaultPath = null)
     {
         _aesGcmService = aesGcmService;
         _vaultPath = vaultPath ?? GetDefaultVaultPath();
+        _apiKeysPath = Path.ChangeExtension(_vaultPath, ".keys");
     }
 
     public bool VaultExists() => File.Exists(_vaultPath);
@@ -115,6 +117,45 @@ public sealed class BinaryVaultRepository : IVaultRepository
         writer.Write(metadata.CreatedAt.ToBinary());
 
         // Encrypted payload
+        writer.Write(encryptedPayload.Length);
+        writer.Write(encryptedPayload);
+    }
+
+    public async Task<IReadOnlyList<ApiKeyEntry>> LoadApiKeysAsync(byte[] derivedKey)
+    {
+        if (!File.Exists(_apiKeysPath))
+            return [];
+
+        try
+        {
+            await using var stream = new FileStream(_apiKeysPath, FileMode.Open, FileAccess.Read);
+            using var reader = new BinaryReader(stream);
+
+            // Leer payload cifrado
+            var payloadLength = reader.ReadInt32();
+            var encryptedPayload = reader.ReadBytes(payloadLength);
+
+            // Descifrar
+            var payload = _aesGcmService.Decrypt(encryptedPayload, derivedKey);
+            var apiKeys = JsonSerializer.Deserialize<List<ApiKeyEntry>>(payload);
+
+            return apiKeys ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    public async Task SaveApiKeysAsync(IEnumerable<ApiKeyEntry> apiKeys, byte[] derivedKey)
+    {
+        var payload = JsonSerializer.SerializeToUtf8Bytes(apiKeys.ToList());
+        var encryptedPayload = _aesGcmService.Encrypt(payload, derivedKey);
+
+        await using var stream = new FileStream(_apiKeysPath, FileMode.Create, FileAccess.Write);
+        await using var writer = new BinaryWriter(stream);
+
+        // Solo guardar payload cifrado (las API Keys usan la misma clave derivada)
         writer.Write(encryptedPayload.Length);
         writer.Write(encryptedPayload);
     }

@@ -2,9 +2,14 @@ using Arca.Core.Entities;
 using Arca.Core.Interfaces;
 using Arca.Infrastructure.Persistence;
 using Arca.Infrastructure.Security;
+using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using Application = System.Windows.Application;
+using Color = System.Windows.Media.Color;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+using MessageBox = System.Windows.MessageBox;
 
 namespace Arca.NET.Views;
 
@@ -13,17 +18,30 @@ public partial class LoginWindow : Window
     private readonly IVaultRepository _vaultRepository;
     private readonly IKeyDerivationService _keyDerivationService;
     private readonly IAesGcmService _aesGcmService;
+    private readonly string? _customVaultPath;
+
+    // Rate limiting para prevenir fuerza bruta
+    private const int MaxFailedAttempts = 5;
+    private const int LockoutMinutes = 5;
+    private int _failedAttempts = 0;
+    private DateTime _lockoutUntil = DateTime.MinValue;
 
     public byte[]? DerivedKey { get; private set; }
 
-    public LoginWindow()
+    public LoginWindow() : this(null)
+    {
+    }
+
+    public LoginWindow(string? vaultPath)
     {
         InitializeComponent();
+
+        _customVaultPath = vaultPath;
 
         // Initialize services
         _aesGcmService = new AesGcmService();
         _keyDerivationService = new KeyDerivationService();
-        _vaultRepository = new BinaryVaultRepository(_aesGcmService);
+        _vaultRepository = new BinaryVaultRepository(_aesGcmService, vaultPath);
 
         UpdateVaultStatus();
     }
@@ -32,15 +50,28 @@ public partial class LoginWindow : Window
     {
         if (_vaultRepository.VaultExists())
         {
-            VaultStatus.Text = $"Vault: {_vaultRepository.GetVaultPath()}";
+            var path = _vaultRepository.GetVaultPath();
+            // Mostrar path abreviado si es muy largo
+            var displayPath = path.Length > 45
+                ? "..." + path.Substring(path.Length - 42)
+                : path;
+            VaultStatus.Text = displayPath;
+            
+            // Mostrar sección de contraseña
+            PasswordSection.Visibility = Visibility.Visible;
+            NoVaultMessage.Visibility = Visibility.Collapsed;
             CreateVaultButton.Visibility = Visibility.Collapsed;
-            UnlockButton.Content = "Unlock Vault";
+            
+            PasswordBox.Focus();
         }
         else
         {
-            VaultStatus.Text = "No vault found. Create one to get started.";
+            VaultStatus.Text = "";
+            
+            // Ocultar sección de contraseña, mostrar mensaje
+            PasswordSection.Visibility = Visibility.Collapsed;
+            NoVaultMessage.Visibility = Visibility.Visible;
             CreateVaultButton.Visibility = Visibility.Visible;
-            UnlockButton.Visibility = Visibility.Collapsed;
         }
     }
 
@@ -59,6 +90,14 @@ public partial class LoginWindow : Window
         if (string.IsNullOrWhiteSpace(password))
         {
             ShowError(ErrorMessage, "Please enter your master password.");
+            return;
+        }
+
+        // Verificar si está bloqueado por fuerza bruta
+        if (_failedAttempts >= MaxFailedAttempts && DateTime.UtcNow < _lockoutUntil)
+        {
+            var remainingLockout = _lockoutUntil - DateTime.UtcNow;
+            ShowError(ErrorMessage, $"Too many failed attempts. Please try again in {remainingLockout.TotalMinutes} minutes.");
             return;
         }
 
@@ -81,20 +120,33 @@ public partial class LoginWindow : Window
             // Try to load secrets to verify the password
             await _vaultRepository.LoadSecretsAsync(derivedKey);
 
-            // Success - store key and open main window
+            // Success - store key and open main window via App
             DerivedKey = derivedKey;
+            _failedAttempts = 0; // Reset failed attempts on success
             HideLoading();
 
-            var mainWindow = new MainWindow(derivedKey, _vaultRepository, _aesGcmService, _keyDerivationService);
-            mainWindow.Show();
-            Close();
+            // Usar App para abrir MainWindow
+            if (Application.Current is App app)
+            {
+                app.ShowMainWindow(derivedKey, _vaultRepository, _aesGcmService, _keyDerivationService);
+            }
         }
         catch (System.Security.Cryptography.AuthenticationTagMismatchException)
         {
-            HideLoading();
-            ShowError(ErrorMessage, "Invalid password. Please try again.");
+            _failedAttempts++; // Incrementar contador de intentos fallidos
+            if (_failedAttempts >= MaxFailedAttempts)
+            {
+                // Bloquear temporalmente el acceso
+                _lockoutUntil = DateTime.UtcNow.AddMinutes(LockoutMinutes);
+                ShowError(ErrorMessage, $"Too many failed attempts. Please try again in {LockoutMinutes} minutes.");
+            }
+            else
+            {
+                ShowError(ErrorMessage, "Invalid password. Please try again.");
+            }
             PasswordBox.Clear();
             PasswordBox.Focus();
+            HideLoading();
         }
         catch (Exception ex)
         {
@@ -201,16 +253,72 @@ public partial class LoginWindow : Window
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
 
-            // Open main window
+            // Open main window via App
             DerivedKey = derivedKey;
-            var mainWindow = new MainWindow(derivedKey, _vaultRepository, _aesGcmService, _keyDerivationService);
-            mainWindow.Show();
-            Close();
+            if (Application.Current is App app)
+            {
+                app.ShowMainWindow(derivedKey, _vaultRepository, _aesGcmService, _keyDerivationService);
+            }
         }
         catch (Exception ex)
         {
             HideLoading();
             ShowError(CreateErrorMessage, $"Error creating vault: {ex.Message}");
+        }
+    }
+
+    private void OpenVaultButton_Click(object sender, RoutedEventArgs e)
+    {
+        var openDialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Open Existing Vault",
+            Filter = "Arca Vault (*.vlt)|*.vlt|All Files (*.*)|*.*",
+            DefaultExt = ".vlt"
+        };
+
+        if (openDialog.ShowDialog() != true)
+            return;
+
+        var vaultPath = openDialog.FileName;
+
+        // Verificar que sea un vault válido
+        try
+        {
+            // Crear nuevo repository apuntando al vault seleccionado
+            var newRepository = new BinaryVaultRepository(_aesGcmService, vaultPath);
+
+            if (!newRepository.VaultExists())
+            {
+                MessageBox.Show("The selected file is not a valid vault.", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            // Verificar que sea un vault válido intentando leer metadata
+            var metadata = newRepository.LoadMetadataAsync().GetAwaiter().GetResult();
+            if (metadata == null)
+            {
+                MessageBox.Show("The selected file is not a valid Arca vault.", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            // Reemplazar el repository actual con el nuevo
+            // Necesitamos recrear la ventana con el nuevo path
+            if (Application.Current is App app)
+            {
+                app.OpenVaultFromPath(vaultPath);
+            }
+        }
+        catch (InvalidDataException)
+        {
+            MessageBox.Show("The selected file is not a valid Arca vault.", "Error",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error opening vault: {ex.Message}", "Error",
+                MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

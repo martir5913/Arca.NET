@@ -1,14 +1,17 @@
+using Arca.Core.Entities;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace Arca.Daemon.Services;
 
-/// <summary>
-/// Manages the in-memory state of the vault (Locked/Unlocked) and the derived key.
-/// </summary>
+// gestión del estado del vault en memoria
 public sealed class VaultStateService
 {
+    private readonly object _lock = new();
     private readonly MemoryCache _keyCache;
     private readonly MemoryCacheEntryOptions _cacheOptions;
+    private byte[]? _derivedKey;
+    private List<SecretEntry> _secrets = [];
+    private string? _vaultPath;
     private const string DerivedKeyIdentifier = "vault_derived_key";
 
     public VaultStateService()
@@ -27,38 +30,126 @@ public sealed class VaultStateService
 
     public VaultState State { get; private set; } = VaultState.Locked;
 
-    /// <summary>
-    /// Unlocks the vault and stores the derived key in protected memory.
-    /// </summary>
-    public void Unlock(byte[] derivedKey)
+    // desbloquea el vault con la clave derivada y los secretos en memoria
+    public void Unlock(byte[] derivedKey, IEnumerable<SecretEntry> secrets, string vaultPath)
     {
-        _keyCache.Set(DerivedKeyIdentifier, derivedKey, _cacheOptions);
-        State = VaultState.Unlocked;
+        lock (_lock)
+        {
+            _derivedKey = derivedKey;
+            _secrets = secrets.ToList();
+            _vaultPath = vaultPath;
+            State = VaultState.Unlocked;
+        }
     }
 
-    /// <summary>
-    /// Locks the vault and clears the derived key from memory.
-    /// </summary>
+    // bloquea el vault y limpia los datos sensibles de la memoria
     public void Lock()
     {
-        if (_keyCache.TryGetValue(DerivedKeyIdentifier, out byte[]? key) && key is not null)
+        lock (_lock)
         {
-            Array.Clear(key, 0, key.Length);
+            if (_derivedKey is not null)
+            {
+                Array.Clear(_derivedKey, 0, _derivedKey.Length);
+                _derivedKey = null;
+            }
+
+            // Limpiar valores sensibles de los secretos
+            foreach (var secret in _secrets)
+            {
+                // Los records son inmutables, solo limpiamos la lista
+            }
+            _secrets.Clear();
+
+            _vaultPath = null;
+            State = VaultState.Locked;
         }
-        _keyCache.Remove(DerivedKeyIdentifier);
-        State = VaultState.Locked;
     }
 
-    /// <summary>
-    /// Gets the derived key if the vault is unlocked.
-    /// </summary>
-    public byte[]? GetDerivedKey()
+    // Actualiza la lista de secretos en memoria.
+    public void UpdateSecrets(IEnumerable<SecretEntry> secrets)
     {
-        if (State == VaultState.Locked)
-            return null;
+        lock (_lock)
+        {
+            _secrets = secrets.ToList();
+        }
+    }
 
-        _keyCache.TryGetValue(DerivedKeyIdentifier, out byte[]? key);
-        return key;
+    public SecretEntry? GetSecret(string key)
+    {
+        lock (_lock)
+        {
+            return _secrets.FirstOrDefault(s =>
+                s.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    public (List<SecretEntry> found, List<string> notFound) GetSecrets(IEnumerable<string> keys)
+    {
+        lock (_lock)
+        {
+            var found = new List<SecretEntry>();
+            var notFound = new List<string>();
+
+            foreach (var key in keys)
+            {
+                var secret = _secrets.FirstOrDefault(s =>
+                    s.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
+
+                if (secret is not null)
+                    found.Add(secret);
+                else
+                    notFound.Add(key);
+            }
+
+            return (found, notFound);
+        }
+    }
+
+    public IReadOnlyList<string> ListKeys(string? filter = null)
+    {
+        lock (_lock)
+        {
+            if (string.IsNullOrWhiteSpace(filter))
+            {
+                return _secrets.Select(s => s.Key).ToList();
+            }
+
+            return _secrets
+                .Where(s => s.Key.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                .Select(s => s.Key)
+                .ToList();
+        }
+    }
+
+    public bool KeyExists(string key)
+    {
+        lock (_lock)
+        {
+            return _secrets.Any(s =>
+                s.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    public int SecretCount
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _secrets.Count;
+            }
+        }
+    }
+
+    public string? VaultPath
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _vaultPath;
+            }
+        }
     }
 }
 
