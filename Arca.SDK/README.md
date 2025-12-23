@@ -113,3 +113,13 @@ builder.Services.AddArcaClient(options =>
 - **Named Pipes** - Comunicación local ultra-rápida (< 1ms de latencia)
 - **Autenticación** - API Keys con permisos granulares
 - **Thread-safe** - Seguro para uso concurrente
+
+## License
+
+### Arca.SDK
+Arca.SDK is licensed under the MIT License and may be freely used,
+modified, and redistributed.
+
+### Arca.NET
+The main Arca.NET application is Source-Available.
+See LICENSE-ARCA-NET.txt for details.

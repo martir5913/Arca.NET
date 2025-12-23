@@ -1,107 +1,156 @@
-Arca.NET - Source Available License
+Arca.NET – Source Available License
 
-Copyright (c) 2025 Develop Martir (Martir_Dev). All rights reserved.
+Copyright (c) 2025 Developer Martir.
+All rights reserved.
 
 ================================================================================
                               TERMS AND CONDITIONS
 ================================================================================
 
+IMPORTANT NOTICE:
+This license applies exclusively to the Arca.NET application and its core
+components. The Arca.SDK is licensed separately under the MIT License.
+See LICENSE-SDK.txt for details.
+
+--------------------------------------------------------------------------------
 1. DEFINITIONS
+--------------------------------------------------------------------------------
 
-   "Software" refers to Arca.NET, Arca.SDK, and all associated source code,
-   documentation, and related materials.
-   
-   "Author" refers to Develop Martir (Martir_Dev).
-   
-   "Internal Use" refers to use within your organization or company for
-   internal projects that are not sold or distributed to third parties.
+"Software" refers to the Arca.NET application and its core components, including
+but not limited to:
 
+- Arca.NET
+- Arca.Core
+- Arca.Infrastructure
+- Arca.Application
+- Arca.Daemon
+
+along with all associated source code, documentation, configuration files, and
+related materials, EXCLUDING the Arca.SDK.
+
+"Author" refers to Develop Martir.
+
+"Internal Use" refers to usage within an individual or organization for internal
+projects that are not sold, licensed, or distributed to third parties.
+
+"Organization" refers to any company, institution, or legal entity using the
+Software internally.
+
+--------------------------------------------------------------------------------
 2. PERMITTED USES
+--------------------------------------------------------------------------------
 
-   You ARE allowed to:
-   
-   (a) View, download, and study the source code
-   (b) Use the Software for personal projects
-   (c) Use the Software for internal corporate/organizational projects
-   (d) Deploy the Software on your company's servers for internal use
-   (e) Modify the Software for your own internal use
-   (f) Share the Software with colleagues within your organization
+You ARE allowed to:
 
+(a) View, download, and study the source code  
+(b) Use the Software for personal, educational, or learning purposes  
+(c) Use the Software for Internal Use within an Organization  
+(d) Deploy the Software on internal servers or infrastructure  
+(e) Modify the Software for Internal Use only  
+(f) Share the Software internally within the same Organization  
+
+--------------------------------------------------------------------------------
 3. REQUIREMENTS
+--------------------------------------------------------------------------------
 
-   When using this Software, you MUST:
-   
-   (a) Keep all copyright notices and this license intact
-   (b) Give appropriate credit to the Author
-   (c) Indicate if you made modifications (for internal tracking)
+When using this Software, you MUST:
 
+(a) Retain all copyright notices and this license  
+(b) Give appropriate credit to the Author  
+(c) Clearly indicate internally if modifications were made to the Software  
+
+--------------------------------------------------------------------------------
 4. RESTRICTIONS
+--------------------------------------------------------------------------------
 
-   You may NOT:
-   
-   (a) Sell the Software or any derivative works
-   (b) Distribute the Software publicly without written permission
-   (c) Use the Software in commercial products sold to third parties
-   (d) Remove or alter copyright notices
-   (e) Sublicense the Software to others outside your organization
-   (f) Claim the Software as your own creation
+You may NOT:
 
+(a) Sell the Software or any derivative works  
+(b) Distribute the Software publicly in source or binary form  
+(c) Use the Software in commercial products or services sold to third parties  
+(d) Sublicense the Software outside your Organization  
+(e) Remove or alter copyright notices  
+(f) Claim the Software or derivative works as your own creation  
+
+--------------------------------------------------------------------------------
 5. CONTRIBUTIONS
+--------------------------------------------------------------------------------
 
-   Contributions are welcome. To contribute:
-   
-   - Contact the Author at: martir.dev@gmail.com
-   - Submit pull requests on GitHub: https://github.com/martir5913/Arca.NET
-   
-   By submitting contributions, you agree that:
-   
-   (a) Your contributions will be licensed under the same terms
-   (b) The Author may incorporate your contributions into the Software
+Contributions are welcome but not guaranteed to be accepted.
 
-6. CORPORATE/ORGANIZATIONAL USE
+To contribute:
+- Submit pull requests via GitHub
+- Or contact the Author directly
 
-   Organizations may use this Software internally without additional licensing,
-   provided they comply with all terms of this license. For commercial 
-   distribution or OEM licensing, contact: martir.dev@gmail.com
+By submitting a contribution, you agree that:
 
-7. NO WARRANTY
+(a) Your contribution will be licensed under the same terms as this license  
+(b) The Author may use, modify, or incorporate the contribution at their
+    discretion  
+(c) The Author is not obligated to accept or merge any contribution  
 
-   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-   AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE
-   USE OF THIS SOFTWARE.
+--------------------------------------------------------------------------------
+6. CORPORATE / ORGANIZATIONAL USE
+--------------------------------------------------------------------------------
 
+Organizations may use the Software internally without additional licensing,
+provided all terms of this license are met.
+
+For commercial redistribution, SaaS offerings, OEM licensing, or third-party
+distribution, a separate commercial license is required. Please contact the
+Author for licensing inquiries.
+
+--------------------------------------------------------------------------------
+7. DISCLAIMER OF WARRANTY
+--------------------------------------------------------------------------------
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+--------------------------------------------------------------------------------
 8. TERMINATION
+--------------------------------------------------------------------------------
 
-   Your rights under this license terminate automatically if you fail to comply
-   with any of its terms. Upon termination, you must destroy all copies of the
-   Software in your possession.
+This license is effective until terminated.
+
+Your rights under this license will terminate automatically if you fail to comply
+with any of its terms. Upon termination, you must cease all use of the Software
+and destroy all copies in your possession.
 
 ================================================================================
                                    SUMMARY
 ================================================================================
 
-   PERMITTED:
-   - Personal use
-   - Internal corporate use
-   - Studying and learning
-   - Modifications for internal use
+THIS LICENSE APPLIES TO:
+- Arca.NET (main application)
+- Arca.Core
+- Arca.Infrastructure
+- Arca.Application
+- Arca.Daemon
 
-   NOT PERMITTED:
-   - Selling or commercial redistribution
-   - Public distribution without permission
-   - Use in commercial products for sale
+THIS LICENSE DOES NOT APPLY TO:
+- Arca.SDK (licensed under the MIT License)
 
-   CONTACT:
-   - Commercial licensing inquiries
-   - Contributions and collaboration
-   - General questions
+PERMITTED:
+- Personal and educational use
+- Internal corporate use
+- Studying and learning
+- Internal modifications
+
+NOT PERMITTED:
+- Selling or commercial redistribution
+- Public distribution without permission
+- Use in commercial products or services for sale
 
 ================================================================================
 
-   Author:  Develop Martir (Martir_Dev)
-   Email:   martir.dev@gmail.com
-   GitHub:  https://github.com/martir5913/Arca.NET
+Author:  Developer Martir
+GitHub:  https://github.com/martir5913/Arca.NET
 
 ================================================================================
