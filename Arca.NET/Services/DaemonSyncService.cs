@@ -1,7 +1,6 @@
+using Arca.Core.Common;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Pipes;
-using Arca.Core.Common;
 using SecretEntry = Arca.Core.Entities.SecretEntry;
 
 namespace Arca.NET.Services;
@@ -45,10 +44,10 @@ public sealed class DaemonSyncService : IDisposable
             };
 
             Process.Start(startInfo);
-            
+
             // Esperar un poco para que inicie
             Thread.Sleep(1000);
-            
+
             return IsDaemonRunning();
         }
         catch
@@ -63,17 +62,11 @@ public sealed class DaemonSyncService : IDisposable
     public async Task NotifyUnlockAsync(byte[] derivedKey, IEnumerable<SecretEntry> secrets, string vaultPath)
     {
         // El Daemon necesita recibir los secretos descifrados para servirlos
-        // Por ahora, la UI actúa como el "desbloqueador" y el Daemon sirve los datos
-        
-        // TODO: Implementar comunicación bidireccional más segura
-        // Por ahora, el estado se maneja localmente en la UI
-        // y el Daemon se sincroniza cuando la UI está activa
+        // Por ahora, la UI actúa como el "desbloqueador" y el Daemon sirve los datos        
+
         await Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Notifica al Daemon que el vault fue bloqueado.
-    /// </summary>
     public async Task NotifyLockAsync()
     {
         // TODO: Implementar notificación de bloqueo
@@ -84,7 +77,7 @@ public sealed class DaemonSyncService : IDisposable
     {
         var baseDir = AppDomain.CurrentDomain.BaseDirectory;
         var daemonPath = Path.Combine(baseDir, "..", "Arca.Daemon", $"{ArcaConstants.DaemonProcessName}.exe");
-        
+
         if (File.Exists(daemonPath))
             return Path.GetFullPath(daemonPath);
 

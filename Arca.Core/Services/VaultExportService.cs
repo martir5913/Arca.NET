@@ -1,15 +1,12 @@
+using Arca.Core.Entities;
+using Konscious.Security.Cryptography;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Arca.Core.Entities;
-using Konscious.Security.Cryptography;
 
 namespace Arca.Core.Services;
 
-/// <summary>
-/// Datos exportados del vault.
-/// </summary>
 public sealed record VaultExportData
 {
     public required int Version { get; init; }
@@ -37,26 +34,12 @@ public sealed record ExportedApiKey
     public required bool CanList { get; init; }
 }
 
-/// <summary>
-/// Opciones para importar un vault.
-/// </summary>
 public sealed class ImportOptions
 {
-    /// <summary>
-    /// Si es true, reemplaza secretos existentes con el mismo nombre.
-    /// Si es false, salta secretos que ya existen.
-    /// </summary>
     public bool OverwriteExisting { get; set; } = false;
-
-    /// <summary>
-    /// Si es true, importa también las API Keys.
-    /// </summary>
     public bool ImportApiKeys { get; set; } = true;
 }
 
-/// <summary>
-/// Resultado de la importación.
-/// </summary>
 public sealed class ImportResult
 {
     public bool Success { get; init; }
@@ -79,18 +62,13 @@ public sealed class ImportResult
     public static ImportResult Failed(string error)
         => new() { Success = false, Error = error };
 }
-
-/// <summary>
-/// Servicio para exportar e importar vaults.
-/// Usa Argon2id para derivación de claves (consistente con el vault principal).
-/// </summary>
 public sealed class VaultExportService
 {
     private const string MagicHeader = "ARCAEXPORT";
     private const int CurrentVersion = 2; // Version 2 usa Argon2id
     private const int SaltSize = 16;
     private const int KeySize = 32;
-    
+
     // Parámetros Argon2id (consistentes con KeyDerivationService)
     private const int Argon2Parallelism = 4;
     private const int Argon2MemorySize = 65536; // 64 MB
@@ -189,7 +167,7 @@ public sealed class VaultExportService
         var ciphertext = reader.ReadBytes(ciphertextLength);
 
         // Derivar clave (Argon2id para v2, PBKDF2 para v1)
-        var key = version >= 2 
+        var key = version >= 2
             ? DeriveKeyArgon2id(exportPassword, salt)
             : DeriveKeyPbkdf2Legacy(exportPassword, salt);
 

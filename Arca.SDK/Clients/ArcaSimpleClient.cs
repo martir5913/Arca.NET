@@ -1,25 +1,15 @@
-using Arca.Core.Common;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Text;
 
 namespace Arca.SDK.Clients;
 
-/// <summary>
-/// Cliente simple basado en Named Pipes (sin gRPC).
-/// Útil para aplicaciones ligeras o que no quieren la dependencia de gRPC.
-/// </summary>
 public sealed class ArcaSimpleClient : IArcaClient
 {
     private readonly string _pipeName;
     private readonly int _timeoutMs;
     private readonly string? _apiKey;
 
-    /// <summary>
-    /// Crea un cliente Arca con autenticación opcional.
-    /// </summary>
-    /// <param name="apiKey">API Key para autenticación (requerido si el servidor tiene autenticación habilitada)</param>
-    /// <param name="timeout">Timeout para operaciones</param>
     public ArcaSimpleClient(string? apiKey = null, TimeSpan? timeout = null)
     {
         _pipeName = $"{ArcaConstants.PipeName}-simple";
@@ -86,7 +76,7 @@ public sealed class ArcaSimpleClient : IArcaClient
             {
                 "OK" when parts.Length >= 2 => SecretResult.Found(parts[1], parts.Length > 2 ? parts[2] : null),
                 "NOTFOUND" => SecretResult.NotFound(key),
-                "ERROR" when parts.Length > 1 && parts[1].Contains("Access denied", StringComparison.OrdinalIgnoreCase) 
+                "ERROR" when parts.Length > 1 && parts[1].Contains("Access denied", StringComparison.OrdinalIgnoreCase)
                     => SecretResult.AccessDenied(key),
                 "ERROR" => SecretResult.Failed(parts.Length > 1 ? parts[1] : "Unknown error"),
                 _ => SecretResult.Failed(response)
@@ -104,7 +94,7 @@ public sealed class ArcaSimpleClient : IArcaClient
         var result = await GetSecretAsync(key, cancellationToken);
 
         if (result.IsAccessDenied)
-            throw new ArcaAccessDeniedException(key, "GET");
+            throw new ArcaAccessDeniedException(key, "PSY");
 
         if (!result.Success)
             throw new ArcaSecretNotFoundException(key, result.Error);
@@ -152,14 +142,14 @@ public sealed class ArcaSimpleClient : IArcaClient
 
             if (parts[0] == "OK" && (parts.Length < 2 || string.IsNullOrEmpty(parts[1])))
             {
-                // OK pero sin secretos (lista vacía o sin permisos para ver ninguno)
+                // OK pero sin secretos 
                 return [];
             }
 
             if (parts[0] == "ERROR")
             {
                 var errorMessage = parts.Length > 1 ? parts[1] : "Unknown error";
-                
+
                 // Detectar error de acceso denegado
                 if (errorMessage.Contains("Access denied", StringComparison.OrdinalIgnoreCase) ||
                     errorMessage.Contains("cannot list", StringComparison.OrdinalIgnoreCase))
@@ -170,7 +160,7 @@ public sealed class ArcaSimpleClient : IArcaClient
                         resource: null,
                         operation: "LIST");
                 }
-                
+
                 throw new ArcaException(errorMessage);
             }
 
@@ -279,6 +269,6 @@ public sealed class ArcaSimpleClient : IArcaClient
 
     public void Dispose()
     {
-        // No hay recursos que liberar
+        // No hay recursos que liberar :v
     }
 }

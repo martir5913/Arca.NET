@@ -9,11 +9,11 @@
     
     <!-- Información del paquete NuGet -->
     <PackageId>Arca.SDK</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Authors>Martir_Dev</Authors>
     <Company>Develop Martir</Company>
     <Description>SDK para acceder a credenciales almacenadas en Arca Vault de forma segura y rápida. Proporciona comunicación via Named Pipes con latencia menor a 1ms.</Description>
-    <PackageTags>vault;secrets;credentials;security;named-pipes;grpc</PackageTags>
+    <PackageTags>vault;secrets;credentials;security;named-pipes</PackageTags>
     <PackageProjectUrl>https://github.com/martir5913/Arca.NET</PackageProjectUrl>
     <RepositoryUrl>https://github.com/martir5913/Arca.NET</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -35,16 +35,10 @@
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
-    <None Include="..\LICENSE" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Grpc.Net.Client" Version="2.67.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Arca.Core\Arca.Core.csproj" />
   </ItemGroup>
 
 </Project>

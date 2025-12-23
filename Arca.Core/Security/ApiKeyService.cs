@@ -8,10 +8,6 @@ public static class ApiKeyService
     private const string Prefix = "arca_";
     private const int KeyLength = 32; // 256 bits
 
-    /// <summary>
-    /// Genera una nueva API Key.
-    /// </summary>
-    /// <returns>Tuple con la API Key en texto plano (para mostrar al usuario) y su hash (para almacenar)</returns>
     public static (string apiKey, string keyHash) GenerateApiKey()
     {
         // Generar bytes aleatorios
@@ -33,9 +29,6 @@ public static class ApiKeyService
         return (apiKey, keyHash);
     }
 
-    /// <summary>
-    /// Calcula el hash SHA256 de una API Key.
-    /// </summary>
     public static string ComputeHash(string apiKey)
     {
         var bytes = Encoding.UTF8.GetBytes(apiKey);
@@ -43,9 +36,6 @@ public static class ApiKeyService
         return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 
-    /// <summary>
-    /// Verifica si una API Key tiene el formato correcto.
-    /// </summary>
     public static bool IsValidFormat(string apiKey)
     {
         return !string.IsNullOrWhiteSpace(apiKey) && apiKey.StartsWith(Prefix);

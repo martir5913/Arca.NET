@@ -78,10 +78,9 @@ else
 
 ```csharp
 // Program.cs
-builder.Services.AddArcaClient(options =>
-{
-    options.ApiKey = Environment.GetEnvironmentVariable("ARCA_API_KEY");
-});
+builder.Services.AddArcaClient(
+    apiKey: Environment.GetEnvironmentVariable("ARCA_API_KEY")
+);
 
 // En servicios
 public class MiServicio(IArcaClient arca)
@@ -91,6 +90,16 @@ public class MiServicio(IArcaClient arca)
 }
 ```
 
+## Configuración con Opciones
+
+```csharp
+builder.Services.AddArcaClient(options =>
+{
+    options.ApiKey = Environment.GetEnvironmentVariable("ARCA_API_KEY");
+    options.Timeout = TimeSpan.FromSeconds(10);
+});
+```
+
 ## Configuración de API Key
 
 ```powershell
@@ -98,32 +107,9 @@ public class MiServicio(IArcaClient arca)
 [Environment]::SetEnvironmentVariable("ARCA_API_KEY", "arca_xxx...", "User")
 ```
 
-## Permisos
+## Características
 
-Las API Keys pueden tener acceso **Full** o **Restricted**:
-
-| Nivel | Descripción |
-|-------|-------------|
-| Full Access | Acceso a todos los secretos |
-| Restricted | Solo secretos seleccionados |
-
-Con permisos restringidos:
-- `GetSecretValueAsync()` lanza `ArcaAccessDeniedException` si no tiene permiso
-- `ListKeysAsync()` solo muestra secretos permitidos (o lanza excepción si `CanList = false`)
-
-## Excepciones
-
-| Excepción | Causa |
-|-----------|-------|
-| `ArcaAccessDeniedException` | API Key sin permiso |
-| `ArcaSecretNotFoundException` | Secreto no existe |
-| `ArcaException` | Error de conexión/general |
-
-## Licencia
-
-Source Available License - Ver [LICENSE](../LICENSE)
-
-## Links
-
-- **GitHub:** https://github.com/martir5913/Arca.NET
-- **Contacto:** martir.dev@gmail.com
+- **Zero dependencias externas** - Solo usa APIs nativas de .NET
+- **Named Pipes** - Comunicación local ultra-rápida (< 1ms de latencia)
+- **Autenticación** - API Keys con permisos granulares
+- **Thread-safe** - Seguro para uso concurrente
