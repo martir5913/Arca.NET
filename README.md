@@ -116,7 +116,7 @@ catch (ArcaAccessDeniedException) { /* Sin permiso */ }
 catch (ArcaSecretNotFoundException) { /* No existe */ }
 ```
 
-?? **Documentación completa:** [Arca.SDK/README.md](Arca.SDK/README.md)
+**Documentación completa:** [Arca.SDK/README.md](Arca.SDK/README.md)
 
 ---
 
@@ -150,7 +150,7 @@ Arca.NET/
 
 **Source Available License**
 
-| ? Permitido | ? No permitido |
+| Permitido | No permitido |
 |--------------|-----------------|
 | Uso personal | Venta |
 | Uso interno corporativo | Redistribución comercial |
