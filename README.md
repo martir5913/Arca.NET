@@ -25,6 +25,10 @@ Gestor de secretos **100% local** para Windows. Almacena credenciales, API keys 
 | Sin auditoría | Log de cada acceso |
 | Dependencia cloud | Local, <1ms latencia |
 
+## Video Tutorial
+
+[![Demo de Arca.NET](https://img.youtube.com/vi/ID_DEL_VIDEO/0.jpg)](https://www.youtube.com/watch?v=pMngnWOl9oo&t)
+
 ---
 
 ## Características
