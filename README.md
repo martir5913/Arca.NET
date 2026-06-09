@@ -86,10 +86,17 @@ dotnet run --project Arca.NET
 
 ## SDK
 
+**Compatibilidad:** .NET 10+ y .NET Framework 4.8+
+
 ### Instalación
 
 ```bash
 dotnet add package Arca.SDK
+```
+
+```powershell
+# Visual Studio — Package Manager Console
+Install-Package Arca.SDK
 ```
 
 ### Uso
@@ -114,6 +121,7 @@ try {
 }
 catch (ArcaAccessDeniedException) { /* Sin permiso */ }
 catch (ArcaSecretNotFoundException) { /* No existe */ }
+catch (ArcaException) { /* Error de conexión o timeout */ }
 ```
 
 **Documentación completa:** [Arca.SDK/README.md](Arca.SDK/README.md)

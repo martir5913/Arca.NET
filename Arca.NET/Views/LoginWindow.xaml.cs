@@ -43,6 +43,11 @@ public partial class LoginWindow : Window
         _keyDerivationService = new KeyDerivationService();
         _vaultRepository = new BinaryVaultRepository(_aesGcmService, vaultPath);
 
+        // Mostrar versión en header y status bar
+        var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        var versionText = v != null ? $"v{v.Major}.{v.Minor}.{v.Build}" : "";
+        txtHeaderVersion.Text = versionText;
+
         UpdateVaultStatus();
     }
 
@@ -56,18 +61,18 @@ public partial class LoginWindow : Window
                 ? "..." + path.Substring(path.Length - 42)
                 : path;
             VaultStatus.Text = displayPath;
-            
+
             // Mostrar sección de contraseña
             PasswordSection.Visibility = Visibility.Visible;
             NoVaultMessage.Visibility = Visibility.Collapsed;
             CreateVaultButton.Visibility = Visibility.Collapsed;
-            
+
             PasswordBox.Focus();
         }
         else
         {
             VaultStatus.Text = "";
-            
+
             // Ocultar sección de contraseña, mostrar mensaje
             PasswordSection.Visibility = Visibility.Collapsed;
             NoVaultMessage.Visibility = Visibility.Visible;

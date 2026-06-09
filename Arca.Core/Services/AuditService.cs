@@ -42,7 +42,7 @@ public sealed class AuditService : IDisposable
     {
         var entry = new AuditLogEntry(
             Guid.NewGuid(),
-            DateTime.UtcNow,
+            DateTime.Now,
             apiKeyName,
             apiKeyId,
             action,
@@ -155,7 +155,7 @@ public sealed class AuditService : IDisposable
 
         try
         {
-            var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+            var today = DateTime.Now.ToString("yyyy-MM-dd");
             var logFile = Path.Combine(_logDirectory, $"audit-{today}.json");
 
             // Append logs to file
@@ -178,7 +178,7 @@ public sealed class AuditService : IDisposable
     {
         try
         {
-            var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+            var today = DateTime.Now.ToString("yyyy-MM-dd");
             var logFile = Path.Combine(_logDirectory, $"audit-{today}.json");
 
             if (!File.Exists(logFile))

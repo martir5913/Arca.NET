@@ -34,6 +34,12 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
+        // Mostrar versión en header y status bar
+        var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        var versionText = v != null ? $"v{v.Major}.{v.Minor}.{v.Build}" : "";
+        txtHeaderVersion.Text = versionText;
+        txtStatusVersion.Text = versionText;
+
         _derivedKey = derivedKey;
         _vaultRepository = vaultRepository;
         _aesGcmService = aesGcmService;
@@ -110,7 +116,7 @@ public partial class MainWindow : Window
             if (apiKey != null)
             {
                 var index = _apiKeys.IndexOf(apiKey);
-                _apiKeys[index] = apiKey with { LastUsedAt = DateTime.UtcNow };
+                _apiKeys[index] = apiKey with { LastUsedAt = DateTime.Now };
                 await SaveApiKeysAsync();
             }
         });
@@ -285,7 +291,7 @@ public partial class MainWindow : Window
                 await SaveSecretsAsync();
                 UpdateSecretCount();
                 RefreshList();
-                
+
                 NotificationService.ShowSuccess("Deleted", $"Secret '{secret.Key}' has been deleted.", 3);
             }
         }
@@ -348,7 +354,7 @@ public partial class MainWindow : Window
                 Key = key,
                 Value = value,
                 Description = string.IsNullOrWhiteSpace(description) ? null : description,
-                ModifiedAt = DateTime.UtcNow
+                ModifiedAt = DateTime.Now
             };
         }
         else
@@ -359,7 +365,7 @@ public partial class MainWindow : Window
                 key,
                 value,
                 string.IsNullOrWhiteSpace(description) ? null : description,
-                DateTime.UtcNow,
+                DateTime.Now,
                 null);
 
             _secrets.Add(newSecret);
@@ -413,16 +419,16 @@ public partial class MainWindow : Window
     private void AccessLevel_Changed(object sender, RoutedEventArgs e)
     {
         if (pnlSecretsSelection == null) return;
-        
-        pnlSecretsSelection.Visibility = rbRestrictedAccess.IsChecked == true 
-            ? Visibility.Visible 
+
+        pnlSecretsSelection.Visibility = rbRestrictedAccess.IsChecked == true
+            ? Visibility.Visible
             : Visibility.Collapsed;
     }
 
     private void SecretFilter_TextChanged(object sender, TextChangedEventArgs e)
     {
         var filter = txtSecretFilter.Text.Trim();
-        
+
         if (string.IsNullOrEmpty(filter))
         {
             lstSecretsCheckboxes.ItemsSource = _secretSelectionItems;
@@ -470,7 +476,7 @@ public partial class MainWindow : Window
             else
             {
                 var secretsCount = permissions.AllowedSecrets.Count;
-                var secretsList = secretsCount > 0 
+                var secretsList = secretsCount > 0
                     ? string.Join(", ", permissions.AllowedSecrets.Take(5)) + (secretsCount > 5 ? $" (+{secretsCount - 5} more)" : "")
                     : "(none)";
 
@@ -504,7 +510,7 @@ public partial class MainWindow : Window
         else
         {
             accessLevel = AccessLevel.Restricted;
-            
+
             // Obtener secretos seleccionados de los checkboxes
             allowedSecrets = _secretSelectionItems
                 .Where(s => s.IsSelected)
@@ -531,7 +537,7 @@ public partial class MainWindow : Window
             name,
             keyHash,
             $"Generated on {DateTime.Now:yyyy-MM-dd HH:mm}",
-            DateTime.UtcNow,
+            DateTime.Now,
             null,
             true,
             permissions);
@@ -546,7 +552,7 @@ public partial class MainWindow : Window
         // Mostrar la API Key generada
         txtGeneratedKey.Text = apiKey;
         pnlGeneratedKey.Visibility = Visibility.Visible;
-        
+
         // Limpiar formulario
         txtNewKeyName.Text = "";
         txtSecretFilter.Text = "";
@@ -598,7 +604,7 @@ public partial class MainWindow : Window
                 lstApiKeys.ItemsSource = _apiKeys;
 
                 UpdateStatusBar();
-                
+
                 NotificationService.ShowSuccess("Revoked", $"API Key '{apiKey.Name}' has been revoked.", 4);
             }
         }
@@ -704,10 +710,10 @@ public partial class MainWindow : Window
         try
         {
             await _exportService.ExportAsync(_secrets, _apiKeys, password, saveDialog.FileName);
-            
-            NotificationService.ShowSuccess("Export Complete", 
+
+            NotificationService.ShowSuccess("Export Complete",
                 $"Vault exported successfully.\n{_secrets.Count} secrets, {_apiKeys.Count} API Keys.", 5);
-            
+
             pnlBackup.Visibility = Visibility.Collapsed;
         }
         catch (Exception ex)
@@ -764,7 +770,7 @@ public partial class MainWindow : Window
             foreach (var secret in exportData.Secrets)
             {
                 var existing = _secrets.FirstOrDefault(s => s.Key.Equals(secret.Key, StringComparison.OrdinalIgnoreCase));
-                
+
                 if (existing != null)
                 {
                     if (overwrite)
@@ -774,7 +780,7 @@ public partial class MainWindow : Window
                         {
                             Value = secret.Value,
                             Description = secret.Description,
-                            ModifiedAt = DateTime.UtcNow
+                            ModifiedAt = DateTime.Now
                         };
                         secretsImported++;
                     }
@@ -790,7 +796,7 @@ public partial class MainWindow : Window
                         secret.Key,
                         secret.Value,
                         secret.Description,
-                        DateTime.UtcNow,
+                        DateTime.Now,
                         null));
                     secretsImported++;
                 }
@@ -802,7 +808,7 @@ public partial class MainWindow : Window
                 foreach (var apiKey in exportData.ApiKeys)
                 {
                     var existing = _apiKeys.FirstOrDefault(k => k.Name.Equals(apiKey.Name, StringComparison.OrdinalIgnoreCase));
-                    
+
                     if (existing != null)
                     {
                         apiKeysSkipped++;
@@ -810,10 +816,10 @@ public partial class MainWindow : Window
                     else
                     {
                         // Crear API Key inactiva (necesita regenerarse)
-                        var level = Enum.TryParse<AccessLevel>(apiKey.AccessLevel, out var parsed) 
-                            ? parsed 
+                        var level = Enum.TryParse<AccessLevel>(apiKey.AccessLevel, out var parsed)
+                            ? parsed
                             : AccessLevel.Restricted;
-                        
+
                         var permissions = new ApiKeyPermissions(
                             level,
                             apiKey.AllowedSecrets,
@@ -825,7 +831,7 @@ public partial class MainWindow : Window
                             $"{apiKey.Name} (imported)",
                             "", // Sin hash - necesita regenerarse
                             apiKey.Description,
-                            DateTime.UtcNow,
+                            DateTime.Now,
                             null,
                             false, // Inactiva
                             permissions));
@@ -848,7 +854,7 @@ public partial class MainWindow : Window
             message += $"\n\nFrom: {exportData.ExportedFrom} ({exportData.ExportedAt:g})";
 
             NotificationService.ShowSuccess("Import Complete", message, 8);
-            
+
             pnlBackup.Visibility = Visibility.Collapsed;
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("password"))

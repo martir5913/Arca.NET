@@ -103,7 +103,7 @@ public sealed class EmbeddedSecretServer : IDisposable
         _serverTask = Task.Run(() => RunServerLoopAsync(_cts.Token));
 
         Debug.WriteLine($"[EmbeddedSecretServer] Server started on pipe: {_pipeName}");
-        
+
         if (!RequireAuthentication)
         {
             Debug.WriteLine("[EmbeddedSecretServer] ?? WARNING: Authentication is DISABLED. Any application can access secrets.");
@@ -168,8 +168,27 @@ public sealed class EmbeddedSecretServer : IDisposable
                     break;
                 }
 
-                // Manejar cliente
-                await HandleClientAsync(pipeServer);
+                // Transferir propiedad del pipe al task concurrente.
+                // Cada cliente se atiende en paralelo sin bloquear el loop principal.
+                var clientPipe = pipeServer;
+                pipeServer = null; // El finally no debe disponer este pipe
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await HandleClientAsync(clientPipe);
+                    }
+                    finally
+                    {
+                        try
+                        {
+                            if (clientPipe.IsConnected) clientPipe.Disconnect();
+                            clientPipe.Dispose();
+                        }
+                        catch { }
+                    }
+                });
             }
             catch (OperationCanceledException)
             {
@@ -182,17 +201,8 @@ public sealed class EmbeddedSecretServer : IDisposable
             }
             finally
             {
-                try
-                {
-                    if (pipeServer != null)
-                    {
-                        if (pipeServer.IsConnected)
-                        {
-                            pipeServer.Disconnect();
-                        }
-                        pipeServer.Dispose();
-                    }
-                }
+                // Solo dispone si el pipe NO fue transferido a un task concurrente
+                try { pipeServer?.Dispose(); }
                 catch { }
             }
         }
@@ -352,7 +362,7 @@ public sealed class EmbeddedSecretServer : IDisposable
             return true;
 
         // Verificar en lista de secretos permitidos
-        if (permissions.AllowedSecrets.Any(s => 
+        if (permissions.AllowedSecrets.Any(s =>
             s.Equals(secretKey, StringComparison.OrdinalIgnoreCase)))
             return true;
 
@@ -381,7 +391,7 @@ public sealed class EmbeddedSecretServer : IDisposable
     private string HandleListWithPermissions(ApiKeyEntry keyEntry, string? filter)
     {
         var permissions = keyEntry.Permissions;
-        
+
         IEnumerable<string> keys;
 
         if (permissions.Level == AccessLevel.Full)

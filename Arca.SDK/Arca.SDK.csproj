@@ -2,35 +2,37 @@
 
   <PropertyGroup>
     <!-- Configuración básica -->
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0;net48</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
-    
+
     <!-- Información del paquete NuGet -->
     <PackageId>Arca.SDK</PackageId>
-    <Version>1.0.2</Version>
+    <Version>1.1</Version>
     <Authors>Martir_Dev</Authors>
     <Company>Develop Martir</Company>
     <Description>SDK para acceder a credenciales almacenadas en Arca Vault de forma segura y rápida. Proporciona comunicación via Named Pipes con latencia menor a 1ms.</Description>
     <PackageTags>vault;secrets;credentials;security;named-pipes</PackageTags>
     <PackageProjectUrl>https://github.com/martir5913/Arca.NET</PackageProjectUrl>
     <RepositoryUrl>https://github.com/martir5913/Arca.NET</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>    
+    <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <Copyright>Copyright (c) 2025 Develop Martir. All rights reserved.</Copyright>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-    
+
     <!-- Generar paquete NuGet al compilar en Release -->
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    
+
     <!-- Documentación XML -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <Title>Arca.SDK</Title>
+    <AssemblyVersion>1.0.7.0</AssemblyVersion>
+    <FileVersion>1.0.7.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
