@@ -1,9 +1,5 @@
 namespace Arca.NET.Services;
 
-/// <summary>
-/// Servicio para manejar el icono en la bandeja del sistema (System Tray).
-/// Permite que la aplicación corra en segundo plano.
-/// </summary>
 public sealed class TrayIconService : IDisposable
 {
     private readonly NotifyIcon _notifyIcon;
@@ -136,23 +132,18 @@ public sealed class TrayIconService : IDisposable
 
     private static Icon CreateSimpleIcon()
     {
-        // Crear un icono simple de 16x16 con un candado
         var bitmap = new Bitmap(16, 16);
         using (var g = Graphics.FromImage(bitmap))
         {
             g.Clear(Color.FromArgb(233, 69, 96)); // Color #e94560
 
-            // Dibujar un candado simple
             using var pen = new Pen(Color.White, 1);
             using var brush = new SolidBrush(Color.White);
 
-            // Arco del candado
             g.DrawArc(pen, 4, 2, 7, 6, 180, 180);
 
-            // Cuerpo del candado
             g.FillRectangle(brush, 3, 7, 10, 7);
 
-            // Cerradura
             g.FillEllipse(new SolidBrush(Color.FromArgb(233, 69, 96)), 6, 9, 4, 3);
         }
 

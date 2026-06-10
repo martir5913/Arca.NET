@@ -1,13 +1,9 @@
-using System.Security.Cryptography;
 using Arca.Core.Interfaces;
 using Konscious.Security.Cryptography;
+using System.Security.Cryptography;
 
 namespace Arca.Infrastructure.Security;
 
-/// <summary>
-/// Implementación de derivación de claves usando Argon2id.
-/// Parámetros recomendados por OWASP para alta seguridad.
-/// </summary>
 public sealed class KeyDerivationService : IKeyDerivationService
 {
     private const int SaltSize = 16;        // 128 bits

@@ -4,21 +4,16 @@ option csharp_namespace = "Arca.Grpc";
 
 package arca;
 
-// Servicio principal del Vault
 service VaultService {
-  // Verifica si el vault está desbloqueado
+ 
   rpc GetStatus (StatusRequest) returns (StatusResponse);
   
-  // Obtiene un secreto por su clave
   rpc GetSecret (GetSecretRequest) returns (GetSecretResponse);
   
-  // Obtiene múltiples secretos por sus claves
   rpc GetSecrets (GetSecretsRequest) returns (GetSecretsResponse);
   
-  // Lista todas las claves disponibles (sin valores)
   rpc ListKeys (ListKeysRequest) returns (ListKeysResponse);
   
-  // Verifica si una clave existe
   rpc KeyExists (KeyExistsRequest) returns (KeyExistsResponse);
 }
 

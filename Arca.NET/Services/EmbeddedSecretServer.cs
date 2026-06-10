@@ -9,13 +9,6 @@ using System.Text;
 
 namespace Arca.NET.Services;
 
-/// <summary>
-/// Servidor embebido que permite que otras aplicaciones obtengan secretos
-/// directamente desde la UI cuando el Daemon no está disponible.
-/// Usa Named Pipes para comunicación ultra-rápida.
-/// Requiere autenticación via API Key.
-/// Incluye sistema de auditoría completo.
-/// </summary>
 public sealed class EmbeddedSecretServer : IDisposable
 {
     private readonly ConcurrentDictionary<string, SecretEntry> _secrets = new(StringComparer.OrdinalIgnoreCase);
@@ -27,10 +20,6 @@ public sealed class EmbeddedSecretServer : IDisposable
     private volatile bool _isRunning;
     private readonly string _pipeName;
 
-    /// <summary>
-    /// Si es true, requiere autenticación para acceder a secretos.
-    /// Si es false, cualquier proceso local puede acceder (modo desarrollo).
-    /// </summary>
     public bool RequireAuthentication { get; set; } = true;
 
     public bool IsRunning => _isRunning;
@@ -43,9 +32,6 @@ public sealed class EmbeddedSecretServer : IDisposable
         _auditService = new AuditService();
     }
 
-    /// <summary>
-    /// Actualiza los secretos disponibles para servir.
-    /// </summary>
     public void UpdateSecrets(IEnumerable<SecretEntry> secrets)
     {
         _secrets.Clear();
@@ -56,9 +42,6 @@ public sealed class EmbeddedSecretServer : IDisposable
         Debug.WriteLine($"[EmbeddedSecretServer] Secrets updated: {_secrets.Count} secrets loaded");
     }
 
-    /// <summary>
-    /// Actualiza las API Keys autorizadas.
-    /// </summary>
     public void UpdateApiKeys(IEnumerable<ApiKeyEntry> apiKeys)
     {
         _apiKeys.Clear();
@@ -69,9 +52,6 @@ public sealed class EmbeddedSecretServer : IDisposable
         Debug.WriteLine($"[EmbeddedSecretServer] API Keys updated: {_apiKeys.Count} active keys");
     }
 
-    /// <summary>
-    /// Verifica si una API Key es válida y retorna su información.
-    /// </summary>
     private (bool IsValid, ApiKeyEntry? Entry) ValidateApiKeyWithInfo(string apiKey)
     {
         if (!RequireAuthentication)
@@ -89,9 +69,6 @@ public sealed class EmbeddedSecretServer : IDisposable
         return (false, null);
     }
 
-    /// <summary>
-    /// Registra el uso de una API Key.
-    /// </summary>
     public event EventHandler<string>? ApiKeyUsed;
 
     public void Start()
@@ -168,10 +145,9 @@ public sealed class EmbeddedSecretServer : IDisposable
                     break;
                 }
 
-                // Transferir propiedad del pipe al task concurrente.
                 // Cada cliente se atiende en paralelo sin bloquear el loop principal.
                 var clientPipe = pipeServer;
-                pipeServer = null; // El finally no debe disponer este pipe
+                pipeServer = null;
 
                 _ = Task.Run(async () =>
                 {
@@ -201,7 +177,6 @@ public sealed class EmbeddedSecretServer : IDisposable
             }
             finally
             {
-                // Solo dispone si el pipe NO fue transferido a un task concurrente
                 try { pipeServer?.Dispose(); }
                 catch { }
             }
@@ -329,14 +304,14 @@ public sealed class EmbeddedSecretServer : IDisposable
 
             case "LIST":
             case "KEYS":
-                // Verificar si puede listar secretos
+
                 if (!CanListSecrets(keyEntry))
                 {
                     response = "ERROR|Access denied - cannot list secrets";
                     LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "LIST", null, false, "Access denied - cannot list secrets");
                     break;
                 }
-                // Filtrar solo los secretos que tiene permiso de ver
+
                 response = HandleListWithPermissions(keyEntry, parts.Length > 2 ? parts[2] : null);
                 LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "LIST", null, true, null);
                 break;
@@ -350,18 +325,13 @@ public sealed class EmbeddedSecretServer : IDisposable
         return response;
     }
 
-    /// <summary>
-    /// Verifica si la API Key tiene permiso para acceder a un secreto específico.
-    /// </summary>
     private bool HasPermissionToAccess(ApiKeyEntry keyEntry, string secretKey)
     {
         var permissions = keyEntry.Permissions;
 
-        // Full access permite todo
         if (permissions.Level == AccessLevel.Full)
             return true;
 
-        // Verificar en lista de secretos permitidos
         if (permissions.AllowedSecrets.Any(s =>
             s.Equals(secretKey, StringComparison.OrdinalIgnoreCase)))
             return true;
@@ -377,17 +347,11 @@ public sealed class EmbeddedSecretServer : IDisposable
         return false;
     }
 
-    /// <summary>
-    /// Verifica si la API Key puede listar secretos.
-    /// </summary>
     private bool CanListSecrets(ApiKeyEntry keyEntry)
     {
         return keyEntry.Permissions.CanList;
     }
 
-    /// <summary>
-    /// Lista solo los secretos que la API Key tiene permiso de ver.
-    /// </summary>
     private string HandleListWithPermissions(ApiKeyEntry keyEntry, string? filter)
     {
         var permissions = keyEntry.Permissions;

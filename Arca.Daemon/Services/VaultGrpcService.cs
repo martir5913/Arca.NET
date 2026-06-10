@@ -2,7 +2,7 @@ using Arca.Grpc;
 using Grpc.Core;
 
 namespace Arca.Daemon.Services;
-// implementación del servicio gRPC para manejar solicitudes relacionadas con el vault
+
 public sealed class VaultGrpcService : VaultService.VaultServiceBase
 {
     private readonly VaultStateService _vaultState;

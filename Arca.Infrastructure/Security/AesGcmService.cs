@@ -1,12 +1,8 @@
-using System.Security.Cryptography;
 using Arca.Core.Interfaces;
+using System.Security.Cryptography;
 
 namespace Arca.Infrastructure.Security;
 
-/// <summary>
-/// Implementación de cifrado AES-256-GCM (Autenticado).
-/// El formato del ciphertext es: [Nonce (12 bytes)][Tag (16 bytes)][CiphertextData]
-/// </summary>
 public sealed class AesGcmService : IAesGcmService
 {
     private const int NonceSize = 12; // 96 bits recomendado para GCM

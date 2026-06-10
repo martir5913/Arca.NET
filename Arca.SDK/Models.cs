@@ -26,9 +26,5 @@ public sealed class VaultStatus
     public bool IsUnlocked { get; init; }
     public string? VaultPath { get; init; }
     public int SecretCount { get; init; }
-
-    /// <summary>
-    /// Indica si el servidor requiere autenticación via API Key.
-    /// </summary>
     public bool RequiresAuthentication { get; init; }
 }

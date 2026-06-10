@@ -1,15 +1,9 @@
-using System.Text;
-using System.Text.Json;
 using Arca.Core.Entities;
 using Arca.Core.Interfaces;
+using System.Text.Json;
 
 namespace Arca.Infrastructure.Persistence;
 
-/// <summary>
-/// Repositorio binario para el archivo vault (.vlt).
-/// Formato del archivo:
-/// [Magic "ARCA" (4 bytes)][Version (4 bytes)][Salt (16 bytes)][CreatedAt (8 bytes)][EncryptedPayload]
-/// </summary>
 public sealed class BinaryVaultRepository : IVaultRepository
 {
     private static readonly byte[] MagicNumber = "ARCA"u8.ToArray();

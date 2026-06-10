@@ -19,8 +19,6 @@ public sealed class ArcaSimpleClient : IArcaClient
 
     public async Task<VaultStatus> GetStatusAsync(CancellationToken cancellationToken = default)
     {
-        // Deja propagar las excepciones — el llamador decide cómo manejarlas.
-        // IsAvailableAsync actúa como wrapper seguro que retorna false ante cualquier fallo.
         var response = await SendCommandAsync("STATUS", cancellationToken).ConfigureAwait(false);
         var parts = response.Split('|');
 
@@ -283,6 +281,6 @@ public sealed class ArcaSimpleClient : IArcaClient
 
     public void Dispose()
     {
-        // No hay recursos que liberar :v
+        // No hay recursos que liberar :v quien lo diria 
     }
 }

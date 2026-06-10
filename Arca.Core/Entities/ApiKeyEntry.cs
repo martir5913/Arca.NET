@@ -3,12 +3,12 @@ namespace Arca.Core.Entities;
 public sealed record ApiKeyEntry(
     Guid Id,
     string Name,
-    string KeyHash,           // Hash SHA256 de la API Key
+    string KeyHash,
     string? Description,
     DateTime CreatedAt,
     DateTime? LastUsedAt,
     bool IsActive,
-    ApiKeyPermissions Permissions  // Permisos de acceso
+    ApiKeyPermissions Permissions
 );
 
 public sealed record ApiKeyPermissions(
