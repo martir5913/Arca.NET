@@ -1,10 +1,12 @@
-using Arca.Core.Common;
+ï»¿using Arca.Core.Common;
 using Arca.Core.Entities;
 using Arca.Core.Security;
 using Arca.Core.Services;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Pipes;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 
 namespace Arca.NET.Services;
@@ -85,7 +87,7 @@ public sealed class EmbeddedSecretServer : IDisposable
         {
             Debug.WriteLine("[EmbeddedSecretServer] ?? WARNING: Authentication is DISABLED. Any application can access secrets.");
             Debug.WriteLine("[EmbeddedSecretServer] ?? This should only be used for development purposes.");
-            // Log de auditoría para modo inseguro
+            // Log de auditorï¿½a para modo inseguro
             LogAudit("SYSTEM", "", "SERVER_START", null, true, "WARNING: Server started WITHOUT authentication");
         }
         else
@@ -105,7 +107,7 @@ public sealed class EmbeddedSecretServer : IDisposable
 
         try
         {
-            // Crear una conexión dummy para desbloquear WaitForConnectionAsync
+            // Crear una conexiï¿½n dummy para desbloquear WaitForConnectionAsync
             using var dummyClient = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut);
             dummyClient.Connect(100);
         }
@@ -185,6 +187,55 @@ public sealed class EmbeddedSecretServer : IDisposable
         Debug.WriteLine("[EmbeddedSecretServer] Server loop ended");
     }
 
+    private NamedPipeServerStream CreatePipeServerStream()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var pipeSecurity = new PipeSecurity();
+
+            // 1. Permitir acceso Read/Write a usuarios autenticados locales (incluye IIS, servicios y otros usuarios)
+            var authenticatedUsersSid = new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null);
+            pipeSecurity.AddAccessRule(new PipeAccessRule(
+                authenticatedUsersSid,
+                PipeAccessRights.ReadWrite,
+                AccessControlType.Allow));
+
+            // 2. Permitir acceso Read/Write al grupo BuiltinUsers (usuarios estÃ¡ndar e identidades locales)
+            var builtinUsersSid = new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null);
+            pipeSecurity.AddAccessRule(new PipeAccessRule(
+                builtinUsersSid,
+                PipeAccessRights.ReadWrite,
+                AccessControlType.Allow));
+
+            // 3. Otorgar FullControl al usuario actual que ejecuta el servidor
+            var currentUser = WindowsIdentity.GetCurrent().User;
+            if (currentUser != null)
+            {
+                pipeSecurity.AddAccessRule(new PipeAccessRule(
+                    currentUser,
+                    PipeAccessRights.FullControl,
+                    AccessControlType.Allow));
+            }
+
+            return NamedPipeServerStreamAcl.Create(
+                _pipeName,
+                PipeDirection.InOut,
+                NamedPipeServerStream.MaxAllowedServerInstances,
+                PipeTransmissionMode.Byte,
+                PipeOptions.Asynchronous,
+                inBufferSize: 0,
+                outBufferSize: 0,
+                pipeSecurity: pipeSecurity);
+        }
+
+        return new NamedPipeServerStream(
+            _pipeName,
+            PipeDirection.InOut,
+            NamedPipeServerStream.MaxAllowedServerInstances,
+            PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous);
+    }
+
     private async Task HandleClientAsync(NamedPipeServerStream pipeServer)
     {
         try
@@ -207,17 +258,17 @@ public sealed class EmbeddedSecretServer : IDisposable
 
             string response;
 
-            // STATUS no requiere autenticación (para verificar si el servidor está corriendo)
+            // STATUS no requiere autenticaciï¿½n (para verificar si el servidor estï¿½ corriendo)
             if (command == "STATUS")
             {
                 response = HandleStatus();
             }
-            // AUTH verifica si una API Key es válida
+            // AUTH verifica si una API Key es vï¿½lida
             else if (command == "AUTH" && parts.Length >= 2)
             {
                 response = HandleAuth(parts[1]);
             }
-            // Todos los demás comandos requieren autenticación
+            // Todos los demï¿½s comandos requieren autenticaciï¿½n
             else if (RequireAuthentication)
             {
                 if (parts.Length < 2)
@@ -249,7 +300,7 @@ public sealed class EmbeddedSecretServer : IDisposable
             }
             else
             {
-                // Modo sin autenticación (desarrollo)
+                // Modo sin autenticaciï¿½n (desarrollo)
                 response = ProcessUnauthenticatedCommand(command, parts);
             }
 
@@ -369,7 +420,7 @@ public sealed class EmbeddedSecretServer : IDisposable
             keys = _secrets.Keys.Where(k => HasPermissionToAccess(keyEntry, k));
         }
 
-        // Aplicar filtro adicional si se especificó
+        // Aplicar filtro adicional si se especificï¿½
         if (!string.IsNullOrWhiteSpace(filter))
         {
             keys = keys.Where(k => k.Contains(filter, StringComparison.OrdinalIgnoreCase));
