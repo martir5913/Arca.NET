@@ -1,4 +1,4 @@
-﻿using Arca.Core.Entities;
+using Arca.Core.Entities;
 using Konscious.Security.Cryptography;
 using System.IO.Compression;
 using System.Security.Cryptography;
@@ -34,6 +34,7 @@ public sealed record ExportedApiKey
     public required DateTime CreatedAt { get; init; }
     public required string AccessLevel { get; init; }
     public required List<string> AllowedSecrets { get; init; }
+    public List<string>? AllowedPrefixes { get; init; }
     public required bool CanList { get; init; }
 }
 
@@ -108,6 +109,7 @@ public sealed class VaultExportService
                 CreatedAt = k.CreatedAt,
                 AccessLevel = k.Permissions.Level.ToString(),
                 AllowedSecrets = k.Permissions.AllowedSecrets,
+                AllowedPrefixes = k.Permissions.AllowedPrefixes,
                 CanList = k.Permissions.CanList
             }).ToList()
         };

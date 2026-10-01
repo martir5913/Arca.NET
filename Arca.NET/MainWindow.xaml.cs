@@ -27,6 +27,8 @@ public partial class MainWindow : Window
     private readonly IKeyDerivationService _keyDerivationService;
     private readonly EmbeddedSecretServer _secretServer;
     private readonly VaultExportService _exportService = new();
+    private readonly AutoBackupService _autoBackupService = new();
+    private readonly SettingsService _settingsService = new();
 
     private ObservableCollection<SecretEntry> _secrets = [];
     private ObservableCollection<ApiKeyEntry> _apiKeys = [];
@@ -47,11 +49,14 @@ public partial class MainWindow : Window
         IKeyDerivationService keyDerivationService)
     {
         InitializeComponent();
+        ApplyInitialSettings();
+        LocalizationService.LanguageChanged += (_, _) => OnLanguageChanged();
 
         var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
         var versionText = v != null ? $"v{v.Major}.{v.Minor}.{v.Build}" : "";
         txtHeaderVersion.Text = versionText;
         txtStatusVersion.Text = versionText;
+        txtAboutVersion.Text = versionText;
 
         _derivedKey = derivedKey;
         _vaultRepository = vaultRepository;
@@ -103,11 +108,13 @@ public partial class MainWindow : Window
     private void UpdateStatusBar()
     {
         var authStatus = _secretServer.RequireAuthentication ? "🔐" : "⚠️";
-        txtStatus.Text = $"Baúl activo - Servidor SDK listo {authStatus}";
+        var baseStatus = LocalizationService.GetString("Status_VaultActive", "Baúl activo - Servidor SDK listo");
+        txtStatus.Text = $"{baseStatus} {authStatus}";
 
         if (!_secretServer.RequireAuthentication && _apiKeys.Count == 0)
         {
-            txtStatus.Text += " (Sin API Keys - Acceso libre)";
+            var noKeys = LocalizationService.GetString("Status_NoApiKeys", "(Sin API Keys - Acceso libre)");
+            txtStatus.Text += $" {noKeys}";
         }
     }
 
@@ -224,6 +231,7 @@ public partial class MainWindow : Window
             await _vaultRepository.SaveSecretsAsync(_secrets, _derivedKey);
             _secretServer.UpdateSecrets(_secrets);
             RefreshFolders();
+            _autoBackupService.CreateSnapshot();
         }
         catch (Exception ex)
         {
@@ -245,9 +253,20 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnLanguageChanged()
+    {
+        UpdateSecretCount();
+        RefreshFolders();
+        RefreshList();
+        UpdateStatusBar();
+    }
+
     private void UpdateSecretCount()
     {
-        txtSecretCount.Text = $"{_secrets.Count} secreto{(_secrets.Count != 1 ? "s" : "")}";
+        var unit = _secrets.Count == 1 
+            ? LocalizationService.GetString("Status_SecretSingular", "secreto")
+            : LocalizationService.GetString("Status_SecretPlural", "secretos");
+        txtSecretCount.Text = $"{_secrets.Count} {unit}";
     }
 
     private void RefreshFolders()
@@ -267,7 +286,7 @@ public partial class MainWindow : Window
         {
             new FolderItem
             {
-                Name = "Todos los secretos",
+                Name = LocalizationService.GetString("Folder_All", "Todos los secretos"),
                 FolderKey = null,
                 Count = totalCount,
                 Icon = "📁",
@@ -276,7 +295,7 @@ public partial class MainWindow : Window
             },
             new FolderItem
             {
-                Name = "Sin carpeta / Raíz",
+                Name = LocalizationService.GetString("Folder_NoFolder", "Sin carpeta / Raíz"),
                 FolderKey = "",
                 Count = unassignedCount,
                 Icon = "📂",
@@ -1126,6 +1145,51 @@ public partial class MainWindow : Window
         NotificationService.ShowSuccess("Actualizado", "Registro de auditoría actualizado.", 1);
     }
 
+    private async void ExportAuditLogsButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var logs = _secretServer.AuditService.GetRecentLogs(2000);
+            if (logs.Count == 0)
+            {
+                NotificationService.ShowWarning("Auditoría", "No hay registros de auditoría para exportar.");
+                return;
+            }
+
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "Exportar Registro de Auditoría",
+                Filter = "Archivo CSV (*.csv)|*.csv",
+                FileName = $"Arca_Auditoria_{DateTime.Now:yyyyMMdd_HHmmss}.csv"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("Timestamp,ApiKeyName,ApiKeyId,Action,SecretKey,Success,ErrorMessage");
+                foreach (var log in logs)
+                {
+                    var time = log.Timestamp.ToString("yyyy-MM-dd HH:mm:ss");
+                    var name = $"\"{(log.ApiKeyName ?? "").Replace("\"", "\"\"")}\"";
+                    var id = log.ApiKeyId;
+                    var action = log.Action;
+                    var secret = string.IsNullOrEmpty(log.SecretKey) ? "" : $"\"{log.SecretKey.Replace("\"", "\"\"")}\"";
+                    var success = log.Success ? "OK" : "FAILED";
+                    var error = string.IsNullOrEmpty(log.ErrorMessage) ? "" : $"\"{log.ErrorMessage.Replace("\"", "\"\"")}\"";
+
+                    sb.AppendLine($"{time},{name},{id},{action},{secret},{success},{error}");
+                }
+
+                await System.IO.File.WriteAllTextAsync(dialog.FileName, sb.ToString(), System.Text.Encoding.UTF8);
+                NotificationService.ShowSuccess("Exportación Exitosa", $"Se exportaron {logs.Count} registros a CSV.", 3);
+            }
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError("Error al Exportar", ex.Message);
+        }
+    }
+
     private void CloseAuditLogButton_Click(object sender, RoutedEventArgs e)
     {
         pnlAuditLog.Visibility = Visibility.Collapsed;
@@ -1140,7 +1204,53 @@ public partial class MainWindow : Window
         txtExportPassword.Password = "";
         txtExportPasswordConfirm.Password = "";
         txtImportPassword.Password = "";
+
+        var count = _autoBackupService.GetSnapshotCount();
+        var lastTime = _autoBackupService.LastBackupTime.HasValue 
+            ? _autoBackupService.LastBackupTime.Value.ToString("HH:mm:ss")
+            : "Al iniciar";
+
+        txtAutoBackupStatus.Text = $"Instantáneas rotativas: {count} respaldos guardados (Último: {lastTime}).";
         pnlBackup.Visibility = Visibility.Visible;
+    }
+
+    private void CreateInstantAutoBackup_Click(object sender, RoutedEventArgs e)
+    {
+        var ok = _autoBackupService.CreateSnapshot();
+        if (ok)
+        {
+            var count = _autoBackupService.GetSnapshotCount();
+            txtAutoBackupStatus.Text = $"Instantáneas rotativas: {count} respaldos guardados (Último: {DateTime.Now:HH:mm:ss}).";
+            NotificationService.ShowSuccess("Respaldo Creado", "Instantánea del baúl generada con éxito.", 2);
+        }
+        else
+        {
+            NotificationService.ShowWarning("Respaldo", "No se pudo crear la instantánea.");
+        }
+    }
+
+    private void OpenBackupsFolder_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (System.IO.Directory.Exists(_autoBackupService.BackupDirectory))
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = _autoBackupService.BackupDirectory,
+                    UseShellExecute = true,
+                    Verb = "open"
+                });
+            }
+            else
+            {
+                NotificationService.ShowWarning("Carpeta no encontrada", "Aún no se han generado respaldos.");
+            }
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError("Error al abrir carpeta", ex.Message);
+        }
     }
 
     private void CloseBackupButton_Click(object sender, RoutedEventArgs e)
@@ -1176,6 +1286,9 @@ public partial class MainWindow : Window
             Title = "Exportar Baúl",
             Filter = "Arca Vault Backup (*.arcavault)|*.arcavault",
             DefaultExt = ".arcavault",
+            InitialDirectory = !string.IsNullOrEmpty(_settingsService.Current.DefaultExportDirectory) && Directory.Exists(_settingsService.Current.DefaultExportDirectory) 
+                ? _settingsService.Current.DefaultExportDirectory 
+                : null,
             FileName = $"arca-backup-{DateTime.Now:yyyy-MM-dd}"
         };
 
@@ -1297,7 +1410,7 @@ public partial class MainWindow : Window
                     {
                         if (Enum.TryParse<AccessLevel>(key.AccessLevel, out var level))
                         {
-                            var permissions = new ApiKeyPermissions(level, key.AllowedSecrets ?? [], [], key.CanList);
+                            var permissions = new ApiKeyPermissions(level, key.AllowedSecrets ?? [], key.AllowedPrefixes ?? [], key.CanList);
                             var importedKey = new ApiKeyEntry(
                                 Guid.NewGuid(),
                                 key.Name,
@@ -1346,6 +1459,209 @@ public partial class MainWindow : Window
 
     #endregion
 
+    #region Settings Management
+
+    private void ApplyInitialSettings()
+    {
+        var s = _settingsService.Current;
+        _autoBackupService.Configure(
+            s.CustomBackupDirectory,
+            s.AutoBackupIntervalHours,
+            s.MaxAutoBackupSnapshots,
+            s.AutoBackupEnabled);
+    }
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var s = _settingsService.Current;
+
+        chkAutoBackupEnabled.IsChecked = s.AutoBackupEnabled;
+
+        // Select interval item
+        foreach (System.Windows.Controls.ComboBoxItem item in cmbAutoBackupInterval.Items)
+        {
+            if (int.TryParse(item.Tag?.ToString(), out var hours) && hours == s.AutoBackupIntervalHours)
+            {
+                cmbAutoBackupInterval.SelectedItem = item;
+                break;
+            }
+        }
+
+        // Select max snapshots item
+        foreach (System.Windows.Controls.ComboBoxItem item in cmbMaxSnapshots.Items)
+        {
+            if (int.TryParse(item.Tag?.ToString(), out var count) && count == s.MaxAutoBackupSnapshots)
+            {
+                cmbMaxSnapshots.SelectedItem = item;
+                break;
+            }
+        }
+
+                // Select language item
+        foreach (System.Windows.Controls.ComboBoxItem item in cmbLanguage.Items)
+        {
+            if (string.Equals(item.Tag?.ToString(), s.Language, StringComparison.OrdinalIgnoreCase))
+            {
+                cmbLanguage.SelectedItem = item;
+                break;
+            }
+        }
+
+        txtCustomBackupDir.Text = s.CustomBackupDirectory ?? "";
+        txtDefaultExportDir.Text = s.DefaultExportDirectory ?? "";
+        chkMinimizeToTray.IsChecked = s.MinimizeToTrayOnClose;
+        chkAuditLogging.IsChecked = s.AuditLoggingEnabled;
+
+        pnlSettings.Visibility = Visibility.Visible;
+    }
+
+    private void BrowseBackupDir_Click(object sender, RoutedEventArgs e)
+    {
+        using var dialog = new System.Windows.Forms.FolderBrowserDialog
+        {
+            Description = "Selecciona la carpeta para almacenar los respaldos automáticos",
+            UseDescriptionForTitle = true
+        };
+
+        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+        {
+            txtCustomBackupDir.Text = dialog.SelectedPath;
+        }
+    }
+
+    private void BrowseExportDir_Click(object sender, RoutedEventArgs e)
+    {
+        using var dialog = new System.Windows.Forms.FolderBrowserDialog
+        {
+            Description = "Selecciona la carpeta predeterminada para exportaciones de baúl",
+            UseDescriptionForTitle = true
+        };
+
+        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+        {
+            txtDefaultExportDir.Text = dialog.SelectedPath;
+        }
+    }
+
+    private void CloseSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        pnlSettings.Visibility = Visibility.Collapsed;
+    }
+
+    private void SaveSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        int intervalHours = 6;
+        if (cmbAutoBackupInterval.SelectedItem is System.Windows.Controls.ComboBoxItem intervalItem &&
+            int.TryParse(intervalItem.Tag?.ToString(), out var parsedHours))
+        {
+            intervalHours = parsedHours;
+        }
+
+        int maxSnapshots = 15;
+        if (cmbMaxSnapshots.SelectedItem is System.Windows.Controls.ComboBoxItem snapshotItem &&
+            int.TryParse(snapshotItem.Tag?.ToString(), out var parsedCount))
+        {
+            maxSnapshots = parsedCount;
+        }
+
+                var selectedLang = "es";
+        if (cmbLanguage.SelectedItem is System.Windows.Controls.ComboBoxItem langItem &&
+            langItem.Tag is string tag && !string.IsNullOrEmpty(tag))
+        {
+            selectedLang = tag;
+        }
+
+        var customBackup = txtCustomBackupDir.Text.Trim();
+        var defaultExport = txtDefaultExportDir.Text.Trim();
+
+        var updated = new AppSettings
+        {
+            AutoBackupEnabled = chkAutoBackupEnabled.IsChecked == true,
+            AutoBackupIntervalHours = intervalHours,
+            MaxAutoBackupSnapshots = maxSnapshots,
+            CustomBackupDirectory = string.IsNullOrWhiteSpace(customBackup) ? null : customBackup,
+            DefaultExportDirectory = string.IsNullOrWhiteSpace(defaultExport) ? null : defaultExport,
+            MinimizeToTrayOnClose = chkMinimizeToTray.IsChecked == true,
+                        Language = selectedLang,
+            AuditLoggingEnabled = chkAuditLogging.IsChecked == true
+        };
+
+                _settingsService.Save(updated);
+        LocalizationService.SetLanguage(updated.Language);
+
+        _autoBackupService.Configure(
+            updated.CustomBackupDirectory,
+            updated.AutoBackupIntervalHours,
+            updated.MaxAutoBackupSnapshots,
+            updated.AutoBackupEnabled);
+
+        pnlSettings.Visibility = Visibility.Collapsed;
+        NotificationService.ShowSuccess("Ajustes Guardados", "Preferencias actualizadas correctamente.", 3);
+    }
+
+    #endregion
+
+    #region About
+
+    private void AboutButton_Click(object sender, RoutedEventArgs e)
+    {
+        CloseAllOpenModals();
+        pnlAbout.Visibility = Visibility.Visible;
+    }
+
+    private void CloseAboutButton_Click(object sender, RoutedEventArgs e)
+    {
+        pnlAbout.Visibility = Visibility.Collapsed;
+    }
+
+    private void OpenGitHub_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "https://github.com/martir5913/Arca.NET",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError("Error", $"No se pudo abrir el navegador: {ex.Message}");
+        }
+    }
+
+    private void CopyGitHub_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Windows.Clipboard.SetText("https://github.com/martir5913/Arca.NET");
+            NotificationService.ShowSuccess("Copiado", "Enlace de GitHub copiado al portapapeles.", 3);
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowError("Error", $"Error al copiar: {ex.Message}");
+        }
+    }
+
+    private void SendEmail_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "mailto:martir.dev@gmail.com?subject=Consulta%20Arca.NET",
+                UseShellExecute = true
+            });
+        }
+        catch
+        {
+            System.Windows.Clipboard.SetText("martir.dev@gmail.com");
+            NotificationService.ShowSuccess("Copiado", "Correo martir.dev@gmail.com copiado al portapapeles.", 3);
+        }
+    }
+
+    #endregion
+
     protected override void OnKeyDown(System.Windows.Input.KeyEventArgs e)
     {
         if (e.Key == System.Windows.Input.Key.Escape)
@@ -1358,6 +1674,8 @@ public partial class MainWindow : Window
 
     private void CloseAllOpenModals()
     {
+        if (pnlAbout.Visibility == Visibility.Visible) pnlAbout.Visibility = Visibility.Collapsed;
+        if (pnlSettings.Visibility == Visibility.Visible) pnlSettings.Visibility = Visibility.Collapsed;
         if (pnlApiKeys.Visibility == Visibility.Visible) pnlApiKeys.Visibility = Visibility.Collapsed;
         if (pnlAuditLog.Visibility == Visibility.Visible) pnlAuditLog.Visibility = Visibility.Collapsed;
         if (pnlBackup.Visibility == Visibility.Visible) pnlBackup.Visibility = Visibility.Collapsed;

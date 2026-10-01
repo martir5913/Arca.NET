@@ -32,11 +32,14 @@ Gestor de secretos **100% local** para Windows. Almacena credenciales, API keys 
 ## Características
 
 - 🛡️ **AES-256-GCM** + **Argon2id** para cifrado de grado militar.
+- 🌐 **Multilenguaje Dinámico**: Soporte nativo para Español e Inglés con cambio en tiempo real y persistencia.
+- ⚙️ **Panel de Ajustes y Preferencias**: Control centralizado de idioma, frecuencias de respaldo, carpetas de exportación y comportamiento.
 - 🗂️ **Explorador por Carpetas / Proyectos**: Organiza tus secretos de forma limpia sin colisiones de nombres.
-- 🔑 **API Keys Granulares**: Asigna permisos a carpetas completas (`PortalClientes:*`) o a claves específicas.
+- 🔑 **API Keys Granulares**: Asigna permisos a carpetas completas (`PortalClientes:*`) o a claves específicas en un árbol interactivo.
 - 🎲 **Generador Integrado**: Generador de contraseñas seguras y llaves criptográficas AES-256 (Base64).
-- 📋 **Auditoría Completa**: Monitorea qué aplicación y API Key consumió cada secreto.
-- 📦 **Copia de Seguridad (Backup/Restore)**: Exportación e importación cifrada entre servidores.
+- 📋 **Auditoría Completa con Exportación a CSV**: Monitoreo en tiempo real de consumo por API Key y descarga de reportes.
+- 🛡️ **Auto-Backups Rotativos**: Instantáneas automáticas periódicas en segundo plano para protección contra cortes o fallos.
+- 📦 **Copia de Seguridad Cifrada (Backup/Restore)**: Exportación e importación portátil entre servidores con contraseña dedicada.
 - ⚡ **Named Pipes Ultrarrápidos (<1ms)** con auto-descubrimiento y soporte para IIS (ApplicationPoolIdentity) y Servicios de Windows.
 - 🖥️ **Bandeja del Sistema (System Tray)**: Permanece activo en segundo plano mientras tus aplicaciones lo consumen.
 
@@ -139,7 +142,7 @@ El **Arca.SDK** se distribuye bajo licencia de código abierto **MIT** (Consulte
 ---
 
 <p align="center">
-  <b>Autor:</b> Martir_Dev • 
-  <b>GitHub:</b> <a href="https://github.com/martir5913/Arca.NET">martir5913/Arca.NET</a> • 
+  <b>Autor:</b> Ing. Fredy Martir • 
+  <b>GitHub:</b> <a href="https://github.com/martir5913/Arca.NET">https://github.com/martir5913/Arca.NET</a> • 
   <b>Email:</b> martir.dev@gmail.com
 </p>

@@ -35,6 +35,14 @@ public partial class App : Application
 
         base.OnStartup(e);
 
+        // Inicializar idioma según configuración
+        try
+        {
+            var settingsService = new Arca.Core.Services.SettingsService();
+            LocalizationService.SetLanguage(settingsService.Current.Language);
+        }
+        catch { }
+
         // Inicializar el icono de la bandeja del sistema
         _trayIcon = new TrayIconService();
         _trayIcon.ShowWindowRequested += OnShowWindowRequested;

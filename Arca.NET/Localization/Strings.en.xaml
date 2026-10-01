@@ -1,0 +1,158 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:system="clr-namespace:System;assembly=mscorlib">
+
+    <!-- Header & Navigation -->
+    <system:String x:Key="App_Title">Arca - Vault Manager</system:String>
+    <system:String x:Key="Header_Tagline">Vault Manager</system:String>
+    <system:String x:Key="Btn_Settings">⚙️ Settings</system:String>
+    <system:String x:Key="Btn_Lock">🔒 Lock Vault</system:String>
+    <system:String x:Key="Search_Placeholder">🔍 Search secrets by key, value, environment or tag...</system:String>
+    <system:String x:Key="Btn_Backup">📦 Backup</system:String>
+    <system:String x:Key="Btn_Audit">📋 Audit Log</system:String>
+    <system:String x:Key="Btn_ApiKeys">🔑 API Keys</system:String>
+    <system:String x:Key="Btn_NewSecret">➕ New Secret</system:String>
+
+    <!-- Sidebar Explorer -->
+    <system:String x:Key="Sidebar_Title">PROJECTS / FOLDERS</system:String>
+    <system:String x:Key="Sidebar_NewFolder_Tooltip">Create new project folder</system:String>
+    <system:String x:Key="Folder_All">All secrets</system:String>
+    <system:String x:Key="Folder_NoFolder">No folder / Root</system:String>
+    <system:String x:Key="Folder_Delete_Tooltip">Delete folder</system:String>
+    <system:String x:Key="Folder_Empty_Title">This folder has no secrets yet</system:String>
+    <system:String x:Key="Folder_Empty_Subtitle">You can add secrets directly to this project.</system:String>
+    <system:String x:Key="Btn_AddSecretHere">➕ Add Secret here</system:String>
+
+    <!-- Status Bar -->
+    <system:String x:Key="Status_Unlocked">🔓 Vault unlocked</system:String>
+    <system:String x:Key="Status_ServerReady">SDK Server ready</system:String>
+    <system:String x:Key="Status_SecretSingular">secret</system:String>
+    <system:String x:Key="Status_SecretPlural">secrets</system:String>
+    <system:String x:Key="Status_VaultActive">Vault active - SDK Server ready</system:String>
+    <system:String x:Key="Status_NoApiKeys">(No API Keys - Open access)</system:String>
+
+    <!-- Card Actions -->
+    <system:String x:Key="Card_Action_Toggle">Show/Hide value</system:String>
+    <system:String x:Key="Card_Action_Copy">Copy value</system:String>
+    <system:String x:Key="Card_Action_Move">Move secret to another folder</system:String>
+    <system:String x:Key="Card_Action_Edit">Edit secret</system:String>
+    <system:String x:Key="Card_Action_Delete">Delete secret</system:String>
+
+    <!-- Add/Edit Secret Dialog -->
+    <system:String x:Key="Dialog_AddSecret_Title">Add Secret</system:String>
+    <system:String x:Key="Dialog_EditSecret_Title">Edit Secret</system:String>
+    <system:String x:Key="Dialog_Folder_Label">Folder / Project (Optional)</system:String>
+    <system:String x:Key="Dialog_Key_Label">Key (Secret Name)</system:String>
+    <system:String x:Key="Dialog_Key_Placeholder">Ex: ConnectionStrings:db, JwtSettings:SecretKey...</system:String>
+    <system:String x:Key="Dialog_Templates_Label">Templates:</system:String>
+    <system:String x:Key="Dialog_Value_Label">Secret Value</system:String>
+    <system:String x:Key="Dialog_Value_Placeholder">Confidential secret value...</system:String>
+    <system:String x:Key="Dialog_GenPassword_Tooltip">Generate strong password</system:String>
+    <system:String x:Key="Dialog_GenAes_Tooltip">Generate AES-256 Base64 key</system:String>
+    <system:String x:Key="Dialog_Environment_Label">Environment (Optional)</system:String>
+    <system:String x:Key="Dialog_NoEnvironment">(No environment)</system:String>
+    <system:String x:Key="Dialog_Description_Label">Description (Optional)</system:String>
+    <system:String x:Key="Dialog_Description_Placeholder">Optional: Brief note or purpose...</system:String>
+    <system:String x:Key="Btn_Cancel">Cancel</system:String>
+    <system:String x:Key="Btn_Save">💾 Save</system:String>
+    <system:String x:Key="Btn_Close">Close</system:String>
+
+    <!-- Move Secret Dialog -->
+    <system:String x:Key="Move_Title">📁 Move Secret to another Folder</system:String>
+    <system:String x:Key="Move_Prompt">Select or type the destination folder:</system:String>
+    <system:String x:Key="Btn_ConfirmMove">Move Secret</system:String>
+
+    <!-- New Folder Dialog -->
+    <system:String x:Key="Folder_Dialog_Title">New Folder / Project</system:String>
+    <system:String x:Key="Folder_Dialog_Label">Folder or Project Name:</system:String>
+    <system:String x:Key="Folder_Dialog_Placeholder">Ex: Customer_Portal, SAP_Integration...</system:String>
+    <system:String x:Key="Folder_Dialog_Hint">You can add secrets to this folder at any time.</system:String>
+    <system:String x:Key="Btn_CreateFolder">Create Folder</system:String>
+
+    <!-- API Keys Dialog -->
+    <system:String x:Key="ApiKeys_Title">API Keys Management (SDK)</system:String>
+    <system:String x:Key="ApiKeys_Subtitle">Generate API Keys with scope to whole Projects/Folders or individual secrets for the SDK.</system:String>
+    <system:String x:Key="ApiKeys_Name_Label">API Key descriptive name:</system:String>
+    <system:String x:Key="ApiKeys_Name_Placeholder">Ex: WebPortal-Production, BridgeSAP-Service...</system:String>
+    <system:String x:Key="ApiKeys_Access_Label">Access Level:</system:String>
+    <system:String x:Key="ApiKeys_Access_Full">Full Access</system:String>
+    <system:String x:Key="ApiKeys_Access_Restricted">Restricted</system:String>
+    <system:String x:Key="ApiKeys_Tree_Title">Projects &amp; Secrets Tree to expose:</system:String>
+    <system:String x:Key="ApiKeys_Tree_Subtitle">Check full folders or specific secrets.</system:String>
+    <system:String x:Key="ApiKeys_Btn_SelectAll">✓ All</system:String>
+    <system:String x:Key="ApiKeys_Btn_SelectNone">✕ None</system:String>
+    <system:String x:Key="ApiKeys_Btn_ToggleExpand">↔ Expand/Collapse</system:String>
+    <system:String x:Key="ApiKeys_Filter_Label">🔍 Filter projects or secrets:</system:String>
+    <system:String x:Key="ApiKeys_Filter_Placeholder">Type to filter (e.g. SAP, ConnectionStrings, JWT)...</system:String>
+    <system:String x:Key="ApiKeys_CanList">Allow listing available secrets in SDK (ListKeys)</system:String>
+    <system:String x:Key="Btn_GenerateApiKey">🔑 Generate API Key</system:String>
+    <system:String x:Key="ApiKeys_Existing_Title">Existing API Keys:</system:String>
+    <system:String x:Key="ApiKeys_LastUsed">Last used:</system:String>
+    <system:String x:Key="ApiKeys_NeverUsed">Never</system:String>
+    <system:String x:Key="ApiKeys_Btn_View">View</system:String>
+    <system:String x:Key="ApiKeys_Btn_Revoke">Revoke</system:String>
+    <system:String x:Key="ApiKeys_Copy_Warning">⚠️ Copy this API Key now! It will not be shown again.</system:String>
+    <system:String x:Key="Btn_CopyToClipboard">Copy to Clipboard</system:String>
+
+    <!-- Audit Log Dialog -->
+    <system:String x:Key="Audit_Title">📋 Audit Log</system:String>
+    <system:String x:Key="Audit_Subtitle">History of secret access requests and their outcomes.</system:String>
+    <system:String x:Key="Audit_Stat_Total">Total Requests</system:String>
+    <system:String x:Key="Audit_Stat_Success">Successful</system:String>
+    <system:String x:Key="Audit_Stat_Failed">Failed</system:String>
+    <system:String x:Key="Audit_Stat_Clients">Unique API Keys</system:String>
+    <system:String x:Key="Btn_ExportCsv">📥 Export CSV</system:String>
+    <system:String x:Key="Btn_Refresh">🔄 Refresh</system:String>
+
+    <!-- Backup & Restore Dialog -->
+    <system:String x:Key="Backup_Title">Backup &amp; Restore</system:String>
+    <system:String x:Key="Backup_Subtitle">Export, restore, or manage automatic backups of your secrets.</system:String>
+    <system:String x:Key="Backup_Auto_Title">🛡️ Local Auto-Backups (Rolling)</system:String>
+    <system:String x:Key="Btn_OpenFolder">📂 Open Folder</system:String>
+    <system:String x:Key="Btn_InstantBackup">⚡ Create Instant Backup</system:String>
+    <system:String x:Key="Backup_Export_Title">Export Vault to Encrypted File</system:String>
+    <system:String x:Key="Backup_Export_Subtitle">Generates an Argon2id + AES-GCM encrypted file portable across servers.</system:String>
+    <system:String x:Key="Backup_Password_Label">Backup Password:</system:String>
+    <system:String x:Key="Backup_ConfirmPassword_Label">Confirm Password:</system:String>
+    <system:String x:Key="Btn_ExportToFile">📦 Export to File...</system:String>
+    <system:String x:Key="Backup_Import_Title">Import Secrets from Backup File</system:String>
+    <system:String x:Key="Backup_Import_Subtitle">Decrypts and recovers secrets into the current vault.</system:String>
+    <system:String x:Key="Backup_ImportPassword_Label">Backup Password:</system:String>
+    <system:String x:Key="Backup_Overwrite_Option">Overwrite existing secrets with the same key</system:String>
+    <system:String x:Key="Backup_ImportApiKeys_Option">Import API Keys (will be registered as inactive for security)</system:String>
+    <system:String x:Key="Btn_ImportFromFile">📥 Import from File...</system:String>
+
+    <!-- Settings Dialog -->
+    <system:String x:Key="Settings_Title">⚙️ Settings &amp; Preferences</system:String>
+    <system:String x:Key="Settings_Subtitle">Configure language, automatic backups, storage locations and general behavior.</system:String>
+    <system:String x:Key="Settings_Language_Section">🌐 Language / Idioma</system:String>
+    <system:String x:Key="Settings_Language_Label">Interface Language:</system:String>
+    <system:String x:Key="Settings_AutoBackup_Section">🛡️ Automatic Backups (Auto-Backups)</system:String>
+    <system:String x:Key="Settings_AutoBackup_Enable">Enable periodic background backups</system:String>
+    <system:String x:Key="Settings_AutoBackup_Interval">Backup Frequency:</system:String>
+    <system:String x:Key="Settings_AutoBackup_Snapshots">Snapshots to keep:</system:String>
+    <system:String x:Key="Settings_AutoBackup_Folder">Backups Storage Folder:</system:String>
+    <system:String x:Key="Settings_Export_Section">📦 Vault Export (.arcavault)</system:String>
+    <system:String x:Key="Settings_Export_Folder">Default folder for saved exports:</system:String>
+    <system:String x:Key="Settings_Behavior_Section">🖥️ System Behavior</system:String>
+    <system:String x:Key="Settings_MinimizeTray">Minimize to System Tray when closing window</system:String>
+    <system:String x:Key="Settings_AuditLog">Enable real-time access audit logging</system:String>
+    <system:String x:Key="Btn_Browse">📁 Browse...</system:String>
+    <system:String x:Key="Btn_SaveSettings">💾 Save Settings</system:String>
+
+    <!-- About Dialog -->
+    <system:String x:Key="Btn_About">ℹ️ About</system:String>
+    <system:String x:Key="About_Title">About Arca.NET</system:String>
+    <system:String x:Key="About_Subtitle">Secure, modern, and local secrets manager for the .NET ecosystem.</system:String>
+    <system:String x:Key="About_Security_Title">Architecture &amp; Security</system:String>
+    <system:String x:Key="About_Security_Desc">Military-grade encryption with Argon2id + AES-256-GCM. Local inter-process communication using Named Pipes (&lt;1ms) in memory, without opening network ports (100% Air-Gapped).</system:String>
+    <system:String x:Key="About_Developer_Title">Developer &amp; Contact</system:String>
+    <system:String x:Key="About_Dev_Name">Ing. Fredy Martir</system:String>
+    <system:String x:Key="About_Dev_Role">Developer / Software Architect</system:String>
+    <system:String x:Key="About_Dev_Email">martir.dev@gmail.com</system:String>
+    <system:String x:Key="About_Dev_Repo">https://github.com/martir5913/Arca.NET</system:String>
+    <system:String x:Key="About_Btn_OpenRepo">🌐 View GitHub Repository</system:String>
+    <system:String x:Key="About_Btn_CopyRepo">📋 Copy Link</system:String>
+    <system:String x:Key="About_Btn_SendEmail">✉️ Send Email</system:String>
+
+</ResourceDictionary>

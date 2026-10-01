@@ -388,7 +388,11 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Button Content="🔒 Bloquear" Style="{StaticResource IconButton}"
+                    <Button Content="{DynamicResource Btn_About}" Style="{StaticResource ToolbarButton}"
+                            Click="AboutButton_Click" ToolTip="Acerca de Arca.NET" Margin="0,0,8,0"/>
+                    <Button Content="{DynamicResource Btn_Settings}" Style="{StaticResource ToolbarButton}"
+                            Click="SettingsButton_Click" ToolTip="Configuración general y respaldos" Margin="0,0,8,0"/>
+                    <Button Content="{DynamicResource Btn_Lock}" Style="{StaticResource IconButton}"
                             Click="LockButton_Click" ToolTip="Bloquear Baúl" Margin="5,0,0,0" FontSize="13" Foreground="#ff6b6b"/>
                 </StackPanel>
             </Grid>
@@ -415,28 +419,28 @@
 
                                 <!-- Export/Import Button -->
                 <Button Grid.Column="1"
-                        Content="📦 Backup"
+                        Content="{DynamicResource Btn_Backup}"
                         Style="{StaticResource ToolbarButton}"
                         Click="BackupButton_Click"
                         ToolTip="Exportar o Importar baúl"/>
 
                 <!-- Audit Log Button -->
                 <Button Grid.Column="2"
-                        Content="📋 Auditoría"
+                        Content="{DynamicResource Btn_Audit}"
                         Style="{StaticResource ToolbarButton}"
                         Click="AuditLogButton_Click"
                         ToolTip="Ver registro de accesos"/>
 
                 <!-- API Keys Button -->
                 <Button Grid.Column="3"
-                        Content="🔑 API Keys"
+                        Content="{DynamicResource Btn_ApiKeys}"
                         Style="{StaticResource ToolbarButton}"
                         Click="ApiKeysButton_Click"
                         ToolTip="Gestionar API Keys por Proyecto o Secreto"/>
 
                 <!-- Add Button -->
                 <Button Grid.Column="4"
-                        Content="➕ Nuevo Secreto"
+                        Content="{DynamicResource Btn_NewSecret}"
                         Style="{StaticResource PrimaryButton}"
                         Margin="10,0,0,0"
                         Click="AddSecretButton_Click"/>
@@ -460,7 +464,7 @@
 
                     <!-- Sidebar Header -->
                     <Grid Grid.Row="0" Margin="4,2,4,10">
-                        <TextBlock Text="PROYECTOS / CARPETAS" FontSize="11" FontWeight="Bold" Foreground="#8e9bb0" VerticalAlignment="Center"/>
+                        <TextBlock Text="{DynamicResource Sidebar_Title}" FontSize="11" FontWeight="Bold" Foreground="#8e9bb0" VerticalAlignment="Center"/>
                         <Button Content="➕" Style="{StaticResource IconButton}" Padding="6,2" FontSize="12" HorizontalAlignment="Right" ToolTip="Crear Nueva Carpeta / Proyecto" Click="AddFolderButton_Click"/>
                     </Grid>
 
@@ -519,9 +523,9 @@
                         BorderBrush="#0f3460" BorderThickness="1" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center">
                     <StackPanel HorizontalAlignment="Center">
                         <TextBlock Text="📂" FontSize="40" HorizontalAlignment="Center" Margin="0,0,0,10"/>
-                        <TextBlock Text="Esta carpeta aún no tiene secretos" FontSize="16" FontWeight="Bold" Foreground="#e8e8e8" HorizontalAlignment="Center"/>
-                        <TextBlock Text="Puedes agregar secretos directamente a este proyecto." FontSize="12" Foreground="#8e9bb0" HorizontalAlignment="Center" Margin="0,5,0,20"/>
-                        <Button Content="➕ Agregar Secreto aquí" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Click="AddSecretToCurrentFolder_Click"/>
+                        <TextBlock Text="{DynamicResource Folder_Empty_Title}" FontSize="16" FontWeight="Bold" Foreground="#e8e8e8" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{DynamicResource Folder_Empty_Subtitle}" FontSize="12" Foreground="#8e9bb0" HorizontalAlignment="Center" Margin="0,5,0,20"/>
+                        <Button Content="{DynamicResource Btn_AddSecretHere}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Click="AddSecretToCurrentFolder_Click"/>
                     </StackPanel>
                 </Border>
 
@@ -586,7 +590,7 @@
         <!-- Status Bar -->
         <Border Grid.Row="3" Background="#0f3460" Padding="15,8">
             <Grid>
-                <TextBlock x:Name="txtStatus" Text="🔓 Baúl desbloqueado" Foreground="#4ecdc4" FontSize="12"
+                <TextBlock x:Name="txtStatus" Text="{DynamicResource Status_Unlocked}" Foreground="#4ecdc4" FontSize="12"
                            VerticalAlignment="Center"/>
                 <TextBlock x:Name="txtStatusVersion" FontSize="11" Foreground="#888"
                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -1255,9 +1259,8 @@
 
                                                 <TextBlock Grid.Column="4"
                                                            Text="{Binding Success, Converter={StaticResource BoolToStatusConverter}}"
-                                                           FontSize="11" FontWeight="Bold"
+                                                           FontSize="13" FontWeight="Bold"
                                                            VerticalAlignment="Center"
-                                                           Foreground="#FF8E8787"
                                                            HorizontalAlignment="Center"/>
                                             </Grid>
                                         </Border>
@@ -1268,34 +1271,60 @@
                     </Border>
 
                     <!-- Footer -->
-                    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
-                        <Button Content="Actualizar"
-                                Style="{StaticResource IconButton}"
-                                Padding="15,10"
-                                Click="RefreshAuditLogButton_Click"/>
-                        <Button Content="Cerrar"
-                                Style="{StaticResource IconButton}"
-                                Padding="15,10"
-                                Margin="10,0,0,0"
-                                Click="CloseAuditLogButton_Click"/>
-                    </StackPanel>
+                                        <Grid Grid.Row="3" Margin="0,15,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Export CSV Button on the Left -->
+                        <Button Grid.Column="0"
+                                Content="📥 Exportar CSV"
+                                Style="{StaticResource ToolbarButton}"
+                                Padding="12,8"
+                                Click="ExportAuditLogsButton_Click"
+                                ToolTip="Descargar todos los registros de auditoría en formato CSV"/>
+
+                        <!-- Action Buttons on the Right -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="🔄 Actualizar"
+                                    Style="{StaticResource ToolbarButton}"
+                                    Padding="14,8"
+                                    Click="RefreshAuditLogButton_Click"/>
+                            <Button Content="Cerrar"
+                                    Style="{StaticResource ToolbarButton}"
+                                    Padding="14,8"
+                                    Margin="8,0,0,0"
+                                    Click="CloseAuditLogButton_Click"/>
+                        </StackPanel>
+                    </Grid>
                 </Grid>
             </Border>
         </Border>
 
         <!-- Backup Dialog (Export/Import) -->
+                <!-- Backup Dialog (Export/Import & Auto-Backups) -->
         <Border x:Name="pnlBackup"
                 Grid.RowSpan="4"
                 Background="#CC000000"
                 Visibility="Collapsed">
             <Border Background="#1a1a2e"
                     CornerRadius="8"
-                    Width="500"
+                    Width="560"
+                    MaxHeight="680"
                     VerticalAlignment="Center"
                     HorizontalAlignment="Center"
-                    Padding="25">
-                <StackPanel>
-                                        <Grid Margin="0,0,0,15">
+                    Padding="22"
+                    BorderBrush="#2E3646"
+                    BorderThickness="1">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Header -->
+                    <Grid Grid.Row="0" Margin="0,0,0,12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -1304,7 +1333,7 @@
                             <TextBlock Text="Copia de Seguridad y Restauración"
                                        FontSize="20" FontWeight="Bold"
                                        Foreground="#e94560" Margin="0,0,0,4"/>
-                            <TextBlock Text="Exporta tu baúl cifrado o restaura secretos desde un archivo de respaldo."
+                            <TextBlock Text="Exporta, restaura o administra respaldos automáticos de tus secretos."
                                        Foreground="#8e9bb0" FontSize="12" TextWrapping="Wrap"/>
                         </StackPanel>
                         <Button Grid.Column="1" Content="✕"
@@ -1315,70 +1344,426 @@
                                 ToolTip="Cerrar (Esc)"/>
                     </Grid>
 
-                    <!-- Export Section -->
-                    <Border Background="#16213e" CornerRadius="6" Padding="15" Margin="0,0,0,15">
-                        <StackPanel>
-                            <TextBlock Text="Exportar Baúl" FontWeight="Bold" Foreground="#2ed573" FontSize="14" Margin="0,0,0,10"/>
-                            <TextBlock Text="Crea un archivo de respaldo cifrado con Argon2id + AES-GCM."
-                                       Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <!-- Scrollable Body -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="0,0,6,0">
+                            <!-- Auto-Backup Status Section -->
+                            <Border Background="#16213e" CornerRadius="6" Padding="14" Margin="0,0,0,12" BorderBrush="#223354" BorderThickness="1">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="🛡️ Auto-Backups Locales (Rotativos)" FontWeight="Bold" Foreground="#4ecdc4" FontSize="13"/>
+                                            <TextBlock x:Name="txtAutoBackupStatus" Text="Respaldos automáticos activos cada 15 min." Foreground="#94a3b8" FontSize="11" Margin="0,3,0,0"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1"
+                                                Content="📂 Abrir Carpeta"
+                                                Style="{StaticResource ToolbarButton}"
+                                                Padding="10,5" FontSize="11"
+                                                Click="OpenBackupsFolder_Click"
+                                                ToolTip="Abrir carpeta de respaldos automáticos en el Explorador"/>
+                                    </Grid>
+                                    <Button Content="⚡ Crear Respaldo Inmediato"
+                                            Style="{StaticResource ToolbarButton}"
+                                            HorizontalAlignment="Left"
+                                            Padding="10,5" FontSize="11"
+                                            Click="CreateInstantAutoBackup_Click"
+                                            ToolTip="Generar una instantánea de respaldo del baúl ahora mismo"/>
+                                </StackPanel>
+                            </Border>
 
-                            <TextBlock Text="Contraseña de Respaldo:" Foreground="#888" FontSize="11" Margin="0,0,0,5"/>
-                            <PasswordBox x:Name="txtExportPassword"
-                                         Background="#0f3460" Foreground="#e8e8e8"
-                                         BorderBrush="#0f3460" BorderThickness="2"
-                                         Padding="8,6" FontSize="13"/>
+                            <!-- Export Section -->
+                            <Border Background="#16213e" CornerRadius="6" Padding="14" Margin="0,0,0,12" BorderBrush="#223354" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="Exportar Baúl a Archivo Cifrado" FontWeight="Bold" Foreground="#2ed573" FontSize="13" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Genera un archivo cifrado con Argon2id + AES-GCM portable a otros servidores."
+                                               Foreground="#8e9bb0" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
 
-                            <TextBlock Text="Confirmar Contraseña:" Foreground="#888" FontSize="11" Margin="0,10,0,5"/>
-                            <PasswordBox x:Name="txtExportPasswordConfirm"
-                                         Background="#0f3460" Foreground="#e8e8e8"
-                                         BorderBrush="#0f3460" BorderThickness="2"
-                                         Padding="8,6" FontSize="13"/>
+                                    <TextBlock Text="Contraseña de Respaldo:" Foreground="#cbd5e1" FontSize="11" Margin="0,0,0,4"/>
+                                    <PasswordBox x:Name="txtExportPassword"
+                                                 Background="#0f3460" Foreground="#e8e8e8"
+                                                 BorderBrush="#0f3460" BorderThickness="1.5"
+                                                 Padding="8,6" FontSize="13"/>
 
-                            <Button Content="📦 Exportar a Archivo"
-                                    Style="{StaticResource PrimaryButton}"
-                                    Background="#2ed573"
-                                    Margin="0,15,0,0"
-                                    Click="ExportVaultButton_Click"/>
+                                    <TextBlock Text="Confirmar Contraseña:" Foreground="#cbd5e1" FontSize="11" Margin="0,8,0,4"/>
+                                    <PasswordBox x:Name="txtExportPasswordConfirm"
+                                                 Background="#0f3460" Foreground="#e8e8e8"
+                                                 BorderBrush="#0f3460" BorderThickness="1.5"
+                                                 Padding="8,6" FontSize="13"/>
+
+                                    <Button Content="📦 Exportar a Archivo..."
+                                            Style="{StaticResource PrimaryButton}"
+                                            Background="#2ed573"
+                                            Margin="0,12,0,0"
+                                            HorizontalAlignment="Left"
+                                            Click="ExportVaultButton_Click"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Import Section -->
+                            <Border Background="#16213e" CornerRadius="6" Padding="14" Margin="0,0,0,12" BorderBrush="#223354" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="Importar Secretos desde Archivo de Respaldo" FontWeight="Bold" Foreground="#ffa502" FontSize="13" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Descifra y recupera secretos hacia el baúl actual."
+                                               Foreground="#8e9bb0" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                                    <TextBlock Text="Contraseña del Respaldo:" Foreground="#cbd5e1" FontSize="11" Margin="0,0,0,4"/>
+                                    <PasswordBox x:Name="txtImportPassword"
+                                                 Background="#0f3460" Foreground="#e8e8e8"
+                                                 BorderBrush="#0f3460" BorderThickness="1.5"
+                                                 Padding="8,6" FontSize="13"/>
+
+                                    <CheckBox x:Name="chkOverwriteExisting"
+                                              Content="Sobrescribir secretos existentes con la misma clave"
+                                              Foreground="#cbd5e1" FontSize="11" Margin="0,8,0,0"/>
+
+                                    <CheckBox x:Name="chkImportApiKeys"
+                                              Content="Importar API Keys (se registrarán inactivas por seguridad)"
+                                              Foreground="#cbd5e1" FontSize="11" Margin="0,5,0,0" IsChecked="True"/>
+
+                                    <Button Content="📥 Importar desde Archivo..."
+                                            Style="{StaticResource PrimaryButton}"
+                                            Background="#ffa502"
+                                            Margin="0,12,0,0"
+                                            HorizontalAlignment="Left"
+                                            Click="ImportVaultButton_Click"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Footer -->
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,0">
+                                <Button Content="Cerrar"
+                                        Style="{StaticResource ToolbarButton}"
+                                        Padding="16,8"
+                                        Click="CloseBackupButton_Click"/>
+                            </StackPanel>
                         </StackPanel>
-                    </Border>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Border>
 
-                    <!-- Import Section -->
-                    <Border Background="#16213e" CornerRadius="6" Padding="15">
-                        <StackPanel>
-                            <TextBlock Text="Importar Baúl" FontWeight="Bold" Foreground="#ffa502" FontSize="14" Margin="0,0,0,10"/>
-                            <TextBlock Text="Restaura secretos desde un archivo de respaldo."
-                                       Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                <!-- Settings Dialog (Ajustes) -->
+        <Border x:Name="pnlSettings"
+                Grid.RowSpan="4"
+                Background="#CC000000"
+                Visibility="Collapsed">
+            <Border Background="#1a1a2e"
+                    CornerRadius="8"
+                    Width="620"
+                    MaxHeight="680"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    Padding="22"
+                    BorderBrush="#2E3646"
+                    BorderThickness="1">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-                            <TextBlock Text="Contraseña del Respaldo:" Foreground="#888" FontSize="11" Margin="0,0,0,5"/>
-                            <PasswordBox x:Name="txtImportPassword"
-                                         Background="#0f3460" Foreground="#e8e8e8"
-                                         BorderBrush="#0f3460" BorderThickness="2"
-                                         Padding="8,6" FontSize="13"/>
-
-                            <CheckBox x:Name="chkOverwriteExisting"
-                                      Content="Sobrescribir secretos existentes con el mismo nombre"
-                                      Foreground="#888" FontSize="11" Margin="0,10,0,0"/>
-
-                            <CheckBox x:Name="chkImportApiKeys"
-                                      Content="Importar API Keys (se importarán inactivas)"
-                                      Foreground="#888" FontSize="11" Margin="0,5,0,0" IsChecked="True"/>
-
-                            <Button Content="📥 Importar desde Archivo"
-                                    Style="{StaticResource PrimaryButton}"
-                                    Background="#ffa502"
-                                    Margin="0,15,0,0"
-                                    Click="ImportVaultButton_Click"/>
+                    <!-- Header -->
+                    <Grid Grid.Row="0" Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="⚙️ Ajustes y Preferencias"
+                                       FontSize="20" FontWeight="Bold"
+                                       Foreground="#4ecdc4"/>
+                            <TextBlock Text="Configura los respaldos automáticos, ubicaciones de almacenamiento y comportamiento general."
+                                       Foreground="#8e9bb0" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
                         </StackPanel>
-                    </Border>
+                        <Button Grid.Column="1" Content="✕"
+                                Style="{StaticResource IconButton}"
+                                Foreground="#94a3b8" FontSize="15" Padding="8,4"
+                                VerticalAlignment="Top"
+                                Click="CloseSettingsButton_Click"
+                                ToolTip="Cerrar (Esc)"/>
+                    </Grid>
 
-                    <!-- Close Button -->
-                    <Button Content="Cerrar"
-                            Style="{StaticResource IconButton}"
-                            Padding="15,10"
-                            HorizontalAlignment="Right"
-                            Margin="0,15,0,0"
-                            Click="CloseBackupButton_Click"/>
-                </StackPanel>
+                                        <!-- Scrollable Settings Body -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="0,0,6,0">
+                            <!-- Section: Language / Idioma -->
+                            <Border Background="#16213e" CornerRadius="6" Padding="14" Margin="0,0,0,12" BorderBrush="#223354" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="{DynamicResource Settings_Language_Section}" FontWeight="Bold" Foreground="#4ecdc4" FontSize="13" Margin="0,0,0,8"/>
+                                    <TextBlock Text="{DynamicResource Settings_Language_Label}" Foreground="#cbd5e1" FontSize="11" Margin="0,0,0,4"/>
+                                    <ComboBox x:Name="cmbLanguage" Style="{StaticResource ModernComboBox}">
+                                        <ComboBoxItem Content="🇪🇸 Español (Predeterminado)" Tag="es" IsSelected="True"/>
+                                        <ComboBoxItem Content="🇺🇸 English" Tag="en"/>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Section: Auto-Backups -->
+                            <Border Background="#16213e" CornerRadius="6" Padding="14" Margin="0,0,0,12" BorderBrush="#223354" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="🛡️ Respaldos Automáticos (Auto-Backups)" FontWeight="Bold" Foreground="#4ecdc4" FontSize="13" Margin="0,0,0,8"/>
+                                    
+                                    <CheckBox x:Name="chkAutoBackupEnabled"
+                                              Content="Habilitar respaldos automáticos en segundo plano"
+                                              Foreground="#f8fafc" FontSize="12" FontWeight="SemiBold"
+                                              Margin="0,0,0,10" IsChecked="True"/>
+
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Interval -->
+                                        <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                            <TextBlock Text="Frecuencia de Respaldo:" Foreground="#cbd5e1" FontSize="11" Margin="0,0,0,4"/>
+                                            <ComboBox x:Name="cmbAutoBackupInterval" Style="{StaticResource ModernComboBox}">
+                                                <ComboBoxItem Content="Cada 1 hora" Tag="1"/>
+                                                <ComboBoxItem Content="Cada 3 horas" Tag="3"/>
+                                                <ComboBoxItem Content="Cada 6 horas (Recomendado)" Tag="6" IsSelected="True"/>
+                                                <ComboBoxItem Content="Cada 12 horas" Tag="12"/>
+                                                <ComboBoxItem Content="Cada 24 horas" Tag="24"/>
+                                            </ComboBox>
+                                        </StackPanel>
+
+                                        <!-- Max Snapshots -->
+                                        <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                                            <TextBlock Text="Instantáneas a conservar:" Foreground="#cbd5e1" FontSize="11" Margin="0,0,0,4"/>
+                                            <ComboBox x:Name="cmbMaxSnapshots" Style="{StaticResource ModernComboBox}">
+                                                <ComboBoxItem Content="5 instantáneas" Tag="5"/>
+                                                <ComboBoxItem Content="10 instantáneas" Tag="10"/>
+                                                <ComboBoxItem Content="15 instantáneas (Por defecto)" Tag="15" IsSelected="True"/>
+                                                <ComboBoxItem Content="30 instantáneas" Tag="30"/>
+                                                <ComboBoxItem Content="50 instantáneas" Tag="50"/>
+                                            </ComboBox>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Custom Backup Directory -->
+                                    <TextBlock Text="Carpeta de Almacenamiento de Respaldos:" Foreground="#cbd5e1" FontSize="11" Margin="0,0,0,4"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="txtCustomBackupDir"
+                                                 Style="{StaticResource ModernTextBox}"
+                                                 Tag="Por defecto: %LOCALAPPDATA%\Arca\Backups"/>
+                                        <Button Grid.Column="1"
+                                                Content="📁 Examinar..."
+                                                Style="{StaticResource ToolbarButton}"
+                                                Padding="12,8" Margin="8,0,0,0"
+                                                Click="BrowseBackupDir_Click"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Section: Export Location -->
+                            <Border Background="#16213e" CornerRadius="6" Padding="14" Margin="0,0,0,12" BorderBrush="#223354" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="📦 Exportación de Baúl (.arcavault)" FontWeight="Bold" Foreground="#ffa502" FontSize="13" Margin="0,0,0,8"/>
+                                    
+                                    <TextBlock Text="Carpeta predeterminada para guardar exportaciones:" Foreground="#cbd5e1" FontSize="11" Margin="0,0,0,4"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="txtDefaultExportDir"
+                                                 Style="{StaticResource ModernTextBox}"
+                                                 Tag="Por defecto: Carpeta de Documentos del usuario"/>
+                                        <Button Grid.Column="1"
+                                                Content="📁 Examinar..."
+                                                Style="{StaticResource ToolbarButton}"
+                                                Padding="12,8" Margin="8,0,0,0"
+                                                Click="BrowseExportDir_Click"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Section: General Application Behavior -->
+                            <Border Background="#16213e" CornerRadius="6" Padding="14" Margin="0,0,0,12" BorderBrush="#223354" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="🖥️ Comportamiento del Sistema" FontWeight="Bold" Foreground="#e94560" FontSize="13" Margin="0,0,0,8"/>
+                                    
+                                    <CheckBox x:Name="chkMinimizeToTray"
+                                              Content="Minimizar a la bandeja del sistema (System Tray) al cerrar"
+                                              Foreground="#cbd5e1" FontSize="11" Margin="0,0,0,8" IsChecked="True"/>
+
+                                    <CheckBox x:Name="chkAuditLogging"
+                                              Content="Habilitar registro y monitoreo de auditoría en tiempo real"
+                                              Foreground="#cbd5e1" FontSize="11" IsChecked="True"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Footer -->
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+                        <Button Content="Cancelar"
+                                Style="{StaticResource ToolbarButton}"
+                                Padding="15,9"
+                                Click="CloseSettingsButton_Click"/>
+                        <Button Content="💾 Guardar Ajustes"
+                                Style="{StaticResource PrimaryButton}"
+                                Margin="10,0,0,0"
+                                Padding="18,9"
+                                Click="SaveSettingsButton_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- Modal: About Arca.NET -->
+        <Border x:Name="pnlAbout"
+                Grid.RowSpan="4"
+                Background="#cc000000"
+                Visibility="Collapsed"
+                Panel.ZIndex="100">
+            <Border Background="#1a1a2e"
+                    BorderBrush="#0f3460"
+                    BorderThickness="1.5"
+                    CornerRadius="10"
+                    Padding="26"
+                    Width="650"
+                    MaxHeight="700"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Header -->
+                    <Grid Grid.Row="0" Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="🔐" FontSize="24" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <TextBlock Text="ARCA.NET" FontWeight="Bold" FontSize="20" Foreground="#e94560" VerticalAlignment="Center"/>
+                                <Border Background="#0f3460" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock x:Name="txtAboutVersion" FontSize="11" Foreground="#4ecdc4" FontWeight="Bold"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Text="{DynamicResource About_Subtitle}" Foreground="#8e9bb0" FontSize="12"/>
+                        </StackPanel>
+
+                        <Button Grid.Column="1"
+                                Content="✕"
+                                Style="{StaticResource IconButton}"
+                                FontSize="14"
+                                Width="30"
+                                Height="30"
+                                VerticalAlignment="Top"
+                                Click="CloseAboutButton_Click"/>
+                    </Grid>
+
+                    <!-- Content Body -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,0,10">
+                        <StackPanel>
+                            <!-- Section: Security Architecture -->
+                            <Border Background="#16213e" CornerRadius="6" Padding="14" Margin="0,0,0,12" BorderBrush="#223354" BorderThickness="1">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                        <TextBlock Text="🛡️ " FontSize="14"/>
+                                        <TextBlock Text="{DynamicResource About_Security_Title}" FontWeight="Bold" Foreground="#4ecdc4" FontSize="13"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{DynamicResource About_Security_Desc}"
+                                               Foreground="#cbd5e1" FontSize="11" TextWrapping="Wrap" LineHeight="17"/>
+                                    
+                                    <WrapPanel Margin="0,10,0,0">
+                                        <Border Background="#2a2a4e" CornerRadius="4" Padding="7,4" Margin="0,0,6,6">
+                                            <TextBlock Text="🔒 AES-256-GCM" Foreground="#e94560" FontSize="10" FontWeight="Bold"/>
+                                        </Border>
+                                        <Border Background="#2a2a4e" CornerRadius="4" Padding="7,4" Margin="0,0,6,6">
+                                            <TextBlock Text="🔑 Argon2id KDF" Foreground="#ffa502" FontSize="10" FontWeight="Bold"/>
+                                        </Border>
+                                        <Border Background="#2a2a4e" CornerRadius="4" Padding="7,4" Margin="0,0,6,6">
+                                            <TextBlock Text="⚡ Named Pipes &lt;1ms" Foreground="#4ecdc4" FontSize="10" FontWeight="Bold"/>
+                                        </Border>
+                                        <Border Background="#2a2a4e" CornerRadius="4" Padding="7,4" Margin="0,0,6,6">
+                                            <TextBlock Text="🌐 Air-Gapped / 100% Local" Foreground="#a8bbd9" FontSize="10" FontWeight="Bold"/>
+                                        </Border>
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Section: Developer & Contact -->
+                            <Border Background="#16213e" CornerRadius="6" Padding="14" Margin="0,0,0,12" BorderBrush="#223354" BorderThickness="1">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <TextBlock Text="👨‍💻 " FontSize="14"/>
+                                        <TextBlock Text="{DynamicResource About_Developer_Title}" FontWeight="Bold" Foreground="#ffa502" FontSize="13"/>
+                                    </StackPanel>
+                                    
+                                    <Grid Margin="0,4,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Autor / Dev:" Foreground="#8e9bb0" FontSize="11" Margin="0,0,12,6"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{DynamicResource About_Dev_Name}" Foreground="#ffffff" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Email:" Foreground="#8e9bb0" FontSize="11" Margin="0,0,12,6"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{DynamicResource About_Dev_Email}" Foreground="#4ecdc4" FontSize="12" Margin="0,0,0,6"/>
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="GitHub:" Foreground="#8e9bb0" FontSize="11" Margin="0,0,12,0"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{DynamicResource About_Dev_Repo}" Foreground="#e94560" FontSize="11"/>
+                                    </Grid>
+
+                                    <!-- Quick Action Buttons -->
+                                    <WrapPanel Margin="0,6,0,0">
+                                        <Button Content="{DynamicResource About_Btn_OpenRepo}"
+                                                Style="{StaticResource ToolbarButton}"
+                                                Padding="10,6" Margin="0,0,6,6"
+                                                Click="OpenGitHub_Click"/>
+                                        <Button Content="{DynamicResource About_Btn_CopyRepo}"
+                                                Style="{StaticResource ToolbarButton}"
+                                                Padding="10,6" Margin="0,0,6,6"
+                                                Click="CopyGitHub_Click"/>
+                                        <Button Content="{DynamicResource About_Btn_SendEmail}"
+                                                Style="{StaticResource ToolbarButton}"
+                                                Padding="10,6" Margin="0,0,6,6"
+                                                Click="SendEmail_Click"/>
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Section: License & Platform -->
+                            <Border Background="#16213e" CornerRadius="6" Padding="14" BorderBrush="#223354" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="📜 Licencia y Ecosistema" FontWeight="Bold" Foreground="#a8bbd9" FontSize="13" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Arca.NET Core / Daemon / Application (Source Available) • Arca.SDK (MIT License)&#x0a;Compatible con .NET 10, .NET 8, .NET 6 y .NET Framework 4.8+"
+                                               Foreground="#8e9bb0" FontSize="11" LineHeight="16"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Footer -->
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                        <Button Content="{DynamicResource Btn_Close}"
+                                Style="{StaticResource PrimaryButton}"
+                                Padding="20,9"
+                                Click="CloseAboutButton_Click"/>
+                    </StackPanel>
+                </Grid>
             </Border>
         </Border>
 
