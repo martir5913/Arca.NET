@@ -130,6 +130,31 @@ public sealed class ArcaSimpleClient : IArcaClient
         return results;
     }
 
+    public async Task<Dictionary<string, string>> GetFolderSecretsAsync(
+        string folderName,
+        bool stripFolderPrefix = true,
+        CancellationToken cancellationToken = default)
+    {
+        var keys = await ListKeysAsync(folderName, cancellationToken).ConfigureAwait(false);
+        var results = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var key in keys)
+        {
+            var secret = await GetSecretAsync(key, cancellationToken).ConfigureAwait(false);
+            if (secret.Success && secret.Value != null)
+            {
+                var targetKey = key;
+                if (stripFolderPrefix && key.StartsWith($"{folderName}:", StringComparison.OrdinalIgnoreCase))
+                {
+                    targetKey = key.Substring(folderName.Length + 1);
+                }
+                results[targetKey] = secret.Value;
+            }
+        }
+
+        return results;
+    }
+
     public async Task<IReadOnlyList<string>> ListKeysAsync(
         string? filter = null,
         CancellationToken cancellationToken = default)

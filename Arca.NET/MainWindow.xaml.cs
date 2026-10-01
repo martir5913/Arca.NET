@@ -1,4 +1,4 @@
-﻿using Arca.Core.Entities;
+using Arca.Core.Entities;
 using Arca.Core.Interfaces;
 using Arca.Core.Security;
 using Arca.Core.Services;
@@ -6,8 +6,13 @@ using Arca.NET.Controls;
 using Arca.NET.Models;
 using Arca.NET.Services;
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Application = System.Windows.Application;
 using Button = System.Windows.Controls.Button;
 using Clipboard = System.Windows.Clipboard;
@@ -21,10 +26,19 @@ public partial class MainWindow : Window
     private readonly IAesGcmService _aesGcmService;
     private readonly IKeyDerivationService _keyDerivationService;
     private readonly EmbeddedSecretServer _secretServer;
+    private readonly VaultExportService _exportService = new();
 
     private ObservableCollection<SecretEntry> _secrets = [];
     private ObservableCollection<ApiKeyEntry> _apiKeys = [];
+    private ObservableCollection<FolderItem> _folders = [];
+    private ObservableCollection<SecretDisplayItem> _displaySecrets = [];
+    private ObservableCollection<ApiKeyTreeNode> _apiKeyTreeNodes = [];
+    private bool _isTreeExpanded = true;
+
+    private readonly HashSet<string> _knownFolders = new(StringComparer.OrdinalIgnoreCase);
     private SecretEntry? _editingSecret;
+    private SecretEntry? _movingSecret;
+    private string? _currentFolderKey; // null = Todos, "" = Sin carpeta, "Nombre" = Carpeta especifica
 
     public MainWindow(
         byte[] derivedKey,
@@ -34,7 +48,6 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        // Mostrar versión en header y status bar
         var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
         var versionText = v != null ? $"v{v.Major}.{v.Minor}.{v.Build}" : "";
         txtHeaderVersion.Text = versionText;
@@ -46,7 +59,6 @@ public partial class MainWindow : Window
         _keyDerivationService = keyDerivationService;
         _secretServer = new EmbeddedSecretServer();
 
-        // Configurar evento de uso de API Key
         _secretServer.ApiKeyUsed += OnApiKeyUsed;
 
         Loaded += MainWindow_Loaded;
@@ -55,14 +67,13 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        // Inicializar servicios de notificaciones y diálogos
         NotificationService.Initialize(notificationsContainer);
         DialogService.Initialize(dialogContainer);
 
+        LoadKnownFolders();
         await LoadSecretsAsync();
         await LoadApiKeysAsync();
 
-        // Iniciar servidor embebido para que otras apps puedan obtener secretos
         _secretServer.UpdateSecrets(_secrets);
         _secretServer.UpdateApiKeys(_apiKeys);
         _secretServer.RequireAuthentication = _apiKeys.Count > 0;
@@ -73,7 +84,6 @@ public partial class MainWindow : Window
 
     private void MainWindow_StateChanged(object? sender, EventArgs e)
     {
-        // Si se minimiza, enviar a la bandeja del sistema
         if (WindowState == WindowState.Minimized)
         {
             if (Application.Current is App app)
@@ -83,35 +93,28 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>
-    /// Llamado cuando la app se cierra completamente (no solo se oculta).
-    /// </summary>
-    public void OnAppShutdown()
+    protected override void OnClosed(EventArgs e)
     {
         _secretServer.Stop();
         _secretServer.Dispose();
-
-        // Clear sensitive data
-        Array.Clear(_derivedKey, 0, _derivedKey.Length);
+        base.OnClosed(e);
     }
 
     private void UpdateStatusBar()
     {
         var authStatus = _secretServer.RequireAuthentication ? "🔐" : "⚠️";
-        txtStatus.Text = $"Vault unlocked - SDK server active {authStatus}";
+        txtStatus.Text = $"Baúl activo - Servidor SDK listo {authStatus}";
 
         if (!_secretServer.RequireAuthentication && _apiKeys.Count == 0)
         {
-            txtStatus.Text += " (No API Keys - Open access!)";
+            txtStatus.Text += " (Sin API Keys - Acceso libre)";
         }
     }
 
     private async void OnApiKeyUsed(object? sender, string keyHash)
     {
-        // Ejecutar en el hilo de la UI
         await Dispatcher.InvokeAsync(async () =>
         {
-            // Actualizar LastUsedAt de la API Key
             var apiKey = _apiKeys.FirstOrDefault(k => k.KeyHash == keyHash);
             if (apiKey != null)
             {
@@ -122,20 +125,71 @@ public partial class MainWindow : Window
         });
     }
 
+    #region Known Folders Persistence
+
+    private string GetFoldersFilePath()
+    {
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var dir = Path.Combine(appData, "Arca");
+        if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+        return Path.Combine(dir, "folders.json");
+    }
+
+    private void LoadKnownFolders()
+    {
+        try
+        {
+            var path = GetFoldersFilePath();
+            if (File.Exists(path))
+            {
+                var json = File.ReadAllText(path);
+                var list = JsonSerializer.Deserialize<List<string>>(json);
+                if (list != null)
+                {
+                    foreach (var f in list.Where(s => !string.IsNullOrWhiteSpace(s)))
+                    {
+                        _knownFolders.Add(f.Trim());
+                    }
+                }
+            }
+        }
+        catch { }
+    }
+
+    private void SaveKnownFolders()
+    {
+        try
+        {
+            var path = GetFoldersFilePath();
+            var json = JsonSerializer.Serialize(_knownFolders.ToList());
+            File.WriteAllText(path, json);
+        }
+        catch { }
+    }
+
+    #endregion
+
+    #region Secrets & Folders Management
+
     private async Task LoadSecretsAsync()
     {
         try
         {
             var secrets = await _vaultRepository.LoadSecretsAsync(_derivedKey);
             _secrets = new ObservableCollection<SecretEntry>(secrets);
-            lstSecrets.ItemsSource = _secrets;
 
-            // Actualizar servidor embebido
+            foreach (var s in _secrets.Where(x => !string.IsNullOrWhiteSpace(x.Folder)))
+            {
+                _knownFolders.Add(s.Folder!.Trim());
+            }
+            SaveKnownFolders();
+
             _secretServer.UpdateSecrets(_secrets);
 
+            RefreshFolders();
+            RefreshList();
             UpdateSecretCount();
 
-            // Actualizar App con el conteo
             if (Application.Current is App app)
             {
                 app.UpdateSecretCount(_secrets.Count);
@@ -154,10 +208,7 @@ public partial class MainWindow : Window
             var apiKeys = await _vaultRepository.LoadApiKeysAsync(_derivedKey);
             _apiKeys = new ObservableCollection<ApiKeyEntry>(apiKeys);
 
-            // Actualizar servidor embebido
             _secretServer.UpdateApiKeys(_apiKeys);
-
-            // Actualizar estado de la app
             UpdateStatusBar();
         }
         catch (Exception ex)
@@ -172,6 +223,7 @@ public partial class MainWindow : Window
         {
             await _vaultRepository.SaveSecretsAsync(_secrets, _derivedKey);
             _secretServer.UpdateSecrets(_secrets);
+            RefreshFolders();
         }
         catch (Exception ex)
         {
@@ -184,11 +236,7 @@ public partial class MainWindow : Window
         try
         {
             await _vaultRepository.SaveApiKeysAsync(_apiKeys, _derivedKey);
-
-            // Actualizar servidor embebido
             _secretServer.UpdateApiKeys(_apiKeys);
-
-            // Actualizar estado de la app
             UpdateStatusBar();
         }
         catch (Exception ex)
@@ -199,78 +247,386 @@ public partial class MainWindow : Window
 
     private void UpdateSecretCount()
     {
-        txtSecretCount.Text = $"{_secrets.Count} secret{(_secrets.Count != 1 ? "s" : "")}";
+        txtSecretCount.Text = $"{_secrets.Count} secreto{(_secrets.Count != 1 ? "s" : "")}";
     }
 
-    private void LockButton_Click(object sender, RoutedEventArgs e)
+    private void RefreshFolders()
     {
-        // Detener servidor embebido
-        _secretServer.Stop();
+        var totalCount = _secrets.Count;
+        var unassignedCount = _secrets.Count(s => string.IsNullOrWhiteSpace(s.Folder));
 
-        // Clear sensitive data
-        Array.Clear(_derivedKey, 0, _derivedKey.Length);
-
-        // Volver a la pantalla de login via App
-        if (Application.Current is App app)
+        // Asegurar que todos los folders usados en secretos estan en _knownFolders
+        foreach (var s in _secrets.Where(x => !string.IsNullOrWhiteSpace(x.Folder)))
         {
-            app.ShowLoginWindow();
+            _knownFolders.Add(s.Folder!.Trim());
+        }
+
+        var folderList = _knownFolders.OrderBy(f => f).ToList();
+
+        _folders = new ObservableCollection<FolderItem>
+        {
+            new FolderItem
+            {
+                Name = "Todos los secretos",
+                FolderKey = null,
+                Count = totalCount,
+                Icon = "📁",
+                IsSpecial = true,
+                IsSelected = _currentFolderKey == null
+            },
+            new FolderItem
+            {
+                Name = "Sin carpeta / Raíz",
+                FolderKey = "",
+                Count = unassignedCount,
+                Icon = "📂",
+                IsSpecial = true,
+                IsSelected = _currentFolderKey == ""
+            }
+        };
+
+        foreach (var folderName in folderList)
+        {
+            var count = _secrets.Count(s => string.Equals(s.Folder, folderName, StringComparison.OrdinalIgnoreCase));
+            _folders.Add(new FolderItem
+            {
+                Name = folderName,
+                FolderKey = folderName,
+                Count = count,
+                Icon = "🗂️",
+                IsSpecial = false,
+                IsSelected = string.Equals(_currentFolderKey, folderName, StringComparison.OrdinalIgnoreCase)
+            });
+        }
+
+        lstFolders.ItemsSource = _folders;
+    }
+
+    private void FolderItem_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: FolderItem item })
+        {
+            _currentFolderKey = item.FolderKey;
+
+            foreach (var f in _folders)
+            {
+                f.IsSelected = f == item;
+            }
+
+            if (item.FolderKey == null)
+            {
+                txtActiveFolderTitle.Text = "📁 Todos los secretos";
+            }
+            else if (item.FolderKey == "")
+            {
+                txtActiveFolderTitle.Text = "📂 Sin carpeta / Raíz";
+            }
+            else
+            {
+                txtActiveFolderTitle.Text = $"🗂️ {item.Name}";
+            }
+
+            RefreshList();
         }
     }
 
-    private void MinimizeButton_Click(object sender, RoutedEventArgs e)
+    private async void DeleteFolderButton_Click(object sender, RoutedEventArgs e)
     {
-        // Minimizar a la bandeja del sistema
-        if (Application.Current is App app)
+        if (sender is Button { Tag: FolderItem folder } && !folder.IsSpecial && folder.FolderKey != null)
         {
-            app.MinimizeToTray();
+            var secretsInFolder = _secrets.Where(s => string.Equals(s.Folder, folder.FolderKey, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (secretsInFolder.Count > 0)
+            {
+                var confirmed = await DialogService.ConfirmDangerousAsync(
+                    "Eliminar Carpeta",
+                    $"La carpeta '{folder.Name}' contiene {secretsInFolder.Count} secreto(s).\n\n¿Deseas eliminar la carpeta y mover sus secretos a 'Sin carpeta'?",
+                    "Mover a Raíz y Eliminar",
+                    "Cancelar");
+
+                if (!confirmed) return;
+
+                foreach (var s in secretsInFolder)
+                {
+                    var idx = _secrets.IndexOf(s);
+                    _secrets[idx] = s with { Folder = null, ModifiedAt = DateTime.Now };
+                }
+                await SaveSecretsAsync();
+            }
+
+            _knownFolders.Remove(folder.FolderKey);
+            SaveKnownFolders();
+
+            if (string.Equals(_currentFolderKey, folder.FolderKey, StringComparison.OrdinalIgnoreCase))
+            {
+                _currentFolderKey = null;
+                txtActiveFolderTitle.Text = "📁 Todos los secretos";
+            }
+
+            RefreshFolders();
+            RefreshList();
+            NotificationService.ShowSuccess("Carpeta Eliminada", $"La carpeta '{folder.Name}' ha sido eliminada.", 2);
         }
     }
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        var searchText = txtSearch.Text;
+        RefreshList();
+    }
 
-        if (string.IsNullOrWhiteSpace(searchText))
+    private void RefreshList()
+    {
+        var query = txtSearch.Text?.Trim() ?? "";
+
+        IEnumerable<SecretEntry> filtered = _secrets;
+
+        if (_currentFolderKey == "")
         {
-            lstSecrets.ItemsSource = _secrets;
+            filtered = filtered.Where(s => string.IsNullOrWhiteSpace(s.Folder));
+        }
+        else if (!string.IsNullOrEmpty(_currentFolderKey))
+        {
+            filtered = filtered.Where(s => string.Equals(s.Folder, _currentFolderKey, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrEmpty(query))
+        {
+            filtered = filtered.Where(s =>
+                s.Key.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                (s.Folder != null && s.Folder.Contains(query, StringComparison.OrdinalIgnoreCase)) ||
+                (s.Description != null && s.Description.Contains(query, StringComparison.OrdinalIgnoreCase)) ||
+                s.Value.Contains(query, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var list = filtered.Select(s => new SecretDisplayItem(s)).ToList();
+        _displaySecrets = new ObservableCollection<SecretDisplayItem>(list);
+        lstSecrets.ItemsSource = _displaySecrets;
+
+        txtActiveFolderSubtitle.Text = $"({_displaySecrets.Count} secreto{(_displaySecrets.Count != 1 ? "s" : "")})";
+
+        // Mostrar estado vacio si aplica
+        if (_displaySecrets.Count == 0 && !string.IsNullOrEmpty(_currentFolderKey))
+        {
+            pnlEmptyFolderState.Visibility = Visibility.Visible;
+            scrollSecretsList.Visibility = Visibility.Collapsed;
         }
         else
         {
-            var filtered = _secrets.Where(s =>
-                s.Key.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-                (s.Description?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false))
-                .ToList();
-
-            lstSecrets.ItemsSource = filtered;
+            pnlEmptyFolderState.Visibility = Visibility.Collapsed;
+            scrollSecretsList.Visibility = Visibility.Visible;
         }
+    }
+
+    private void ToggleRevealSecretButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: SecretDisplayItem item })
+        {
+            item.IsRevealed = !item.IsRevealed;
+        }
+    }
+
+    private void AddFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        txtNewFolderName.Text = "";
+        pnlFolderDialog.Visibility = Visibility.Visible;
+        txtNewFolderName.Focus();
+    }
+
+    private void CancelFolderDialog_Click(object sender, RoutedEventArgs e)
+    {
+        pnlFolderDialog.Visibility = Visibility.Collapsed;
+    }
+
+    private void ConfirmAddFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var folderName = txtNewFolderName.Text.Trim();
+        if (string.IsNullOrWhiteSpace(folderName))
+        {
+            NotificationService.ShowWarning("Validación", "Ingresa un nombre para la carpeta.");
+            return;
+        }
+
+        pnlFolderDialog.Visibility = Visibility.Collapsed;
+
+        // Registrar la carpeta de forma independiente
+        _knownFolders.Add(folderName);
+        SaveKnownFolders();
+
+        // Seleccionar la nueva carpeta inmediatamente
+        _currentFolderKey = folderName;
+        txtActiveFolderTitle.Text = $"🗂️ {folderName}";
+
+        RefreshFolders();
+        RefreshList();
+
+        NotificationService.ShowSuccess("Carpeta Creada", $"Carpeta '{folderName}' creada. Puedes agregarle secretos cuando desees.", 3);
+    }
+
+    private void AddSecretToCurrentFolder_Click(object sender, RoutedEventArgs e)
+    {
+        AddSecretButton_Click(sender, e);
+    }
+
+    private void PopulateFolderComboBox(System.Windows.Controls.ComboBox comboBox, string? selectedFolder)
+    {
+        var existingFolders = _knownFolders
+            .OrderBy(f => f)
+            .ToList();
+
+        comboBox.ItemsSource = existingFolders;
+        comboBox.Text = selectedFolder ?? "";
     }
 
     private void AddSecretButton_Click(object sender, RoutedEventArgs e)
     {
         _editingSecret = null;
-        txtDialogTitle.Text = "Add New Secret";
+        txtDialogTitle.Text = "Agregar Nuevo Secreto";
         txtSecretKey.Text = "";
         txtSecretValue.Text = "";
         txtSecretDescription.Text = "";
+        cmbSecretEnvironment.SelectedIndex = 0;
         txtDialogError.Visibility = Visibility.Collapsed;
+
+        var defaultFolder = !string.IsNullOrEmpty(_currentFolderKey) ? _currentFolderKey : "";
+        PopulateFolderComboBox(cmbSecretFolder, defaultFolder);
+
         pnlDialog.Visibility = Visibility.Visible;
         txtSecretKey.Focus();
     }
 
     private void EditSecretButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: SecretEntry secret })
+        SecretEntry? target = null;
+
+        if (sender is Button { Tag: SecretDisplayItem item })
+            target = item.Secret;
+        else if (sender is Button { Tag: SecretEntry entry })
+            target = entry;
+
+        if (target != null)
         {
-            _editingSecret = secret;
-            txtDialogTitle.Text = "Edit Secret";
-            txtSecretKey.Text = secret.Key;
-            txtSecretValue.Text = secret.Value;
-            txtSecretDescription.Text = secret.Description ?? "";
+            _editingSecret = target;
+            txtDialogTitle.Text = "Editar Secreto";
+            txtSecretKey.Text = target.Key;
+            txtSecretValue.Text = target.Value;
+            txtSecretDescription.Text = target.Description ?? "";
             txtDialogError.Visibility = Visibility.Collapsed;
+
+            PopulateFolderComboBox(cmbSecretFolder, target.Folder);
+
+            if (string.IsNullOrWhiteSpace(target.Environment))
+            {
+                cmbSecretEnvironment.SelectedIndex = 0;
+            }
+            else
+            {
+                var envItem = cmbSecretEnvironment.Items.Cast<ComboBoxItem>()
+                    .FirstOrDefault(i => string.Equals(i.Content?.ToString(), target.Environment, StringComparison.OrdinalIgnoreCase));
+                if (envItem != null)
+                    cmbSecretEnvironment.SelectedItem = envItem;
+                else
+                    cmbSecretEnvironment.SelectedIndex = 0;
+            }
+
             pnlDialog.Visibility = Visibility.Visible;
             txtSecretKey.Focus();
         }
     }
+
+    #region Quick Move Secret Feature
+
+    private void QuickMoveSecretButton_Click(object sender, RoutedEventArgs e)
+    {
+        SecretEntry? target = null;
+
+        if (sender is Button { Tag: SecretDisplayItem item })
+            target = item.Secret;
+        else if (sender is Button { Tag: SecretEntry entry })
+            target = entry;
+
+        if (target != null)
+        {
+            _movingSecret = target;
+            txtMoveSecretName.Text = $"Secreto: {target.Key} (Actual: {target.Folder ?? "Sin carpeta"})";
+            PopulateFolderComboBox(cmbMoveTargetFolder, target.Folder);
+            pnlMoveDialog.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void CancelMoveDialog_Click(object sender, RoutedEventArgs e)
+    {
+        pnlMoveDialog.Visibility = Visibility.Collapsed;
+        _movingSecret = null;
+    }
+
+    private async void ConfirmMoveSecret_Click(object sender, RoutedEventArgs e)
+    {
+        if (_movingSecret == null) return;
+
+        var targetFolder = cmbMoveTargetFolder.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(targetFolder)) targetFolder = null;
+
+        if (string.Equals(_movingSecret.Folder, targetFolder, StringComparison.OrdinalIgnoreCase))
+        {
+            pnlMoveDialog.Visibility = Visibility.Collapsed;
+            _movingSecret = null;
+            return;
+        }
+
+        var oldFullKey = _movingSecret.FullKey;
+        var oldFolder = _movingSecret.Folder;
+
+        // Registrar nueva carpeta en known folders si no existia
+        if (!string.IsNullOrWhiteSpace(targetFolder))
+        {
+            _knownFolders.Add(targetFolder);
+            SaveKnownFolders();
+        }
+
+        // Actualizar secreto
+        var index = _secrets.IndexOf(_movingSecret);
+        var updated = _movingSecret with
+        {
+            Folder = targetFolder,
+            ModifiedAt = DateTime.Now
+        };
+        _secrets[index] = updated;
+
+        var newFullKey = updated.FullKey;
+
+        // Mitigar y sincronizar API Keys afectadas
+        var apiKeysModified = false;
+        foreach (var key in _apiKeys)
+        {
+            var allowed = key.Permissions.AllowedSecrets;
+            if (allowed != null && (allowed.Contains(oldFullKey, StringComparer.OrdinalIgnoreCase) || allowed.Contains(_movingSecret.Key, StringComparer.OrdinalIgnoreCase)))
+            {
+                allowed.RemoveAll(k => k.Equals(oldFullKey, StringComparison.OrdinalIgnoreCase) || k.Equals(_movingSecret.Key, StringComparison.OrdinalIgnoreCase));
+                if (!allowed.Contains(newFullKey, StringComparer.OrdinalIgnoreCase))
+                {
+                    allowed.Add(newFullKey);
+                }
+                apiKeysModified = true;
+            }
+        }
+
+        await SaveSecretsAsync();
+        if (apiKeysModified)
+        {
+            await SaveApiKeysAsync();
+        }
+
+        pnlMoveDialog.Visibility = Visibility.Collapsed;
+        _movingSecret = null;
+
+        RefreshFolders();
+        RefreshList();
+
+        NotificationService.ShowSuccess("Secreto Movido",
+            $"Secreto movido a '{targetFolder ?? "Sin carpeta"}'. Permisos de API Keys actualizados.", 4);
+    }
+
+    #endregion
 
     private async void DeleteSecretButton_Click(object sender, RoutedEventArgs e)
     {
@@ -280,19 +636,20 @@ public partial class MainWindow : Window
             if (secret is null) return;
 
             var confirmed = await DialogService.ConfirmDangerousAsync(
-                "Delete Secret",
-                $"Are you sure you want to delete the secret '{secret.Key}'?\n\nThis action cannot be undone.",
-                "Delete",
-                "Cancel");
+                "Eliminar Secreto",
+                $"¿Estás seguro de eliminar el secreto '{secret.Key}'?\n\nEsta acción no se puede deshacer.",
+                "Eliminar",
+                "Cancelar");
 
             if (confirmed)
             {
                 _secrets.Remove(secret);
                 await SaveSecretsAsync();
                 UpdateSecretCount();
+                RefreshFolders();
                 RefreshList();
 
-                NotificationService.ShowSuccess("Deleted", $"Secret '{secret.Key}' has been deleted.", 3);
+                NotificationService.ShowSuccess("Eliminado", $"Secreto '{secret.Key}' eliminado correctamente.", 3);
             }
         }
     }
@@ -302,7 +659,7 @@ public partial class MainWindow : Window
         if (sender is Button { Tag: string value })
         {
             Clipboard.SetText(value);
-            NotificationService.ShowSuccess("Copied", "Secret value copied to clipboard.", 2);
+            NotificationService.ShowSuccess("Copiado", "Valor copiado al portapapeles.", 2);
         }
     }
 
@@ -312,59 +669,131 @@ public partial class MainWindow : Window
         _editingSecret = null;
     }
 
+    private void QuickTemplate_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string template })
+        {
+            if (string.IsNullOrWhiteSpace(txtSecretKey.Text) || !txtSecretKey.Text.Contains(':'))
+            {
+                txtSecretKey.Text = template;
+                txtSecretKey.CaretIndex = txtSecretKey.Text.Length;
+            }
+            else
+            {
+                var suffix = txtSecretKey.Text.Split(':').Last();
+                txtSecretKey.Text = template + suffix;
+                txtSecretKey.CaretIndex = txtSecretKey.Text.Length;
+            }
+            txtSecretKey.Focus();
+        }
+    }
+
+    private void GeneratePassword_Click(object sender, RoutedEventArgs e)
+    {
+        const string validChars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*+=-";
+        var bytes = RandomNumberGenerator.GetBytes(24);
+        var sb = new StringBuilder(24);
+        foreach (var b in bytes)
+        {
+            sb.Append(validChars[b % validChars.Length]);
+        }
+        txtSecretValue.Text = sb.ToString();
+        NotificationService.ShowSuccess("Generado", "Contraseña segura generada.", 2);
+    }
+
+    private void GenerateAesKey_Click(object sender, RoutedEventArgs e)
+    {
+        var keyBytes = RandomNumberGenerator.GetBytes(32);
+        txtSecretValue.Text = Convert.ToBase64String(keyBytes);
+        NotificationService.ShowSuccess("Generado", "Llave AES-256 (Base64) generada.", 2);
+    }
+
     private async void SaveSecretButton_Click(object sender, RoutedEventArgs e)
     {
         var key = txtSecretKey.Text.Trim();
         var value = txtSecretValue.Text;
-        var description = txtSecretDescription.Text.Trim();
+        var folder = cmbSecretFolder.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(folder)) folder = null;
 
-        // Validation
+        var description = txtSecretDescription.Text.Trim();
+        var selectedEnvItem = cmbSecretEnvironment.SelectedItem as ComboBoxItem;
+        var environment = selectedEnvItem != null && selectedEnvItem.Content.ToString() != "(Sin entorno)"
+            ? selectedEnvItem.Content.ToString()
+            : null;
+
         if (string.IsNullOrWhiteSpace(key))
         {
-            txtDialogError.Text = "Key is required.";
+            txtDialogError.Text = "La clave del secreto es requerida.";
             txtDialogError.Visibility = Visibility.Visible;
             return;
         }
 
         if (string.IsNullOrWhiteSpace(value))
         {
-            txtDialogError.Text = "Value is required.";
+            txtDialogError.Text = "El valor del secreto es requerido.";
             txtDialogError.Visibility = Visibility.Visible;
             return;
         }
 
-        // Check for duplicate key (excluding current editing secret)
         var existingKey = _secrets.FirstOrDefault(s =>
             s.Key.Equals(key, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(s.Folder, folder, StringComparison.OrdinalIgnoreCase) &&
             s.Id != _editingSecret?.Id);
 
         if (existingKey is not null)
         {
-            txtDialogError.Text = "A secret with this key already exists.";
+            txtDialogError.Text = "Ya existe un secreto con esta clave en esta carpeta/proyecto.";
             txtDialogError.Visibility = Visibility.Visible;
             return;
         }
 
+        if (!string.IsNullOrWhiteSpace(folder))
+        {
+            _knownFolders.Add(folder);
+            SaveKnownFolders();
+        }
+
         if (_editingSecret is not null)
         {
-            // Update existing
+            var oldFullKey = _editingSecret.FullKey;
             var index = _secrets.IndexOf(_secrets.First(s => s.Id == _editingSecret.Id));
-            _secrets[index] = _editingSecret with
+            var updated = _editingSecret with
             {
                 Key = key,
                 Value = value,
+                Folder = folder,
+                Environment = environment,
                 Description = string.IsNullOrWhiteSpace(description) ? null : description,
                 ModifiedAt = DateTime.Now
             };
+            _secrets[index] = updated;
+
+            // Si cambio de carpeta, sincronizar API Keys
+            if (!string.Equals(oldFullKey, updated.FullKey, StringComparison.OrdinalIgnoreCase))
+            {
+                var apiKeysModified = false;
+                foreach (var k in _apiKeys)
+                {
+                    if (k.Permissions.AllowedSecrets.Contains(oldFullKey, StringComparer.OrdinalIgnoreCase))
+                    {
+                        k.Permissions.AllowedSecrets.RemoveAll(x => x.Equals(oldFullKey, StringComparison.OrdinalIgnoreCase));
+                        k.Permissions.AllowedSecrets.Add(updated.FullKey);
+                        apiKeysModified = true;
+                    }
+                }
+                if (apiKeysModified) await SaveApiKeysAsync();
+            }
         }
         else
         {
-            // Add new
             var newSecret = new SecretEntry(
                 Guid.NewGuid(),
                 key,
                 value,
+                folder,
                 string.IsNullOrWhiteSpace(description) ? null : description,
+                environment,
+                null,
                 DateTime.Now,
                 null);
 
@@ -373,47 +802,112 @@ public partial class MainWindow : Window
 
         await SaveSecretsAsync();
         UpdateSecretCount();
+        RefreshFolders();
         RefreshList();
 
         pnlDialog.Visibility = Visibility.Collapsed;
         _editingSecret = null;
     }
 
-    private void RefreshList()
-    {
-        var currentSearch = txtSearch.Text;
-        lstSecrets.ItemsSource = null;
-
-        if (string.IsNullOrWhiteSpace(currentSearch))
-        {
-            lstSecrets.ItemsSource = _secrets;
-        }
-        else
-        {
-            SearchBox_TextChanged(txtSearch, null!);
-        }
-    }
+    #endregion
 
     #region API Keys Management
 
-    private ObservableCollection<SecretSelectionItem> _secretSelectionItems = [];
-
     private void ApiKeysButton_Click(object sender, RoutedEventArgs e)
     {
-        // Cargar lista de secretos para checkboxes
-        _secretSelectionItems = new ObservableCollection<SecretSelectionItem>(
-            _secrets.Select(s => new SecretSelectionItem { Key = s.Key, IsSelected = false }));
-        lstSecretsCheckboxes.ItemsSource = _secretSelectionItems;
-
-        // Reset form
+        BuildApiKeyTree();
         lstApiKeys.ItemsSource = _apiKeys;
         pnlGeneratedKey.Visibility = Visibility.Collapsed;
         txtNewKeyName.Text = "";
         txtSecretFilter.Text = "";
         rbFullAccess.IsChecked = true;
-        chkCanList.IsChecked = false;
+        chkCanList.IsChecked = true;
         pnlSecretsSelection.Visibility = Visibility.Collapsed;
         pnlApiKeys.Visibility = Visibility.Visible;
+    }
+
+    private void BuildApiKeyTree()
+    {
+        _apiKeyTreeNodes = new ObservableCollection<ApiKeyTreeNode>();
+
+        // 1. Folders
+        var folderNames = _knownFolders.OrderBy(f => f).ToList();
+        foreach (var folder in folderNames)
+        {
+            var secretsInFolder = _secrets
+                .Where(s => string.Equals(s.Folder, folder, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(s => s.Key)
+                .ToList();
+
+            var folderNode = new ApiKeyTreeNode
+            {
+                Name = folder,
+                DisplayText = $"{folder} ({secretsInFolder.Count} secreto{(secretsInFolder.Count == 1 ? "" : "s")})",
+                Icon = "🗂️",
+                IsFolder = true,
+                FolderName = folder,
+                IsSelected = false,
+                IsExpanded = true
+            };
+
+            foreach (var s in secretsInFolder)
+            {
+                var secretNode = new ApiKeyTreeNode
+                {
+                    Name = s.Key,
+                    DisplayText = s.Key + (string.IsNullOrEmpty(s.Environment) ? "" : $" [{s.Environment}]"),
+                    FullKey = s.FullKey,
+                    Icon = "🔑",
+                    IsFolder = false,
+                    FolderName = folder,
+                    Parent = folderNode,
+                    IsSelected = false
+                };
+                folderNode.Children.Add(secretNode);
+            }
+
+            _apiKeyTreeNodes.Add(folderNode);
+        }
+
+        // 2. Root secrets (without folder)
+        var rootSecrets = _secrets
+            .Where(s => string.IsNullOrEmpty(s.Folder))
+            .OrderBy(s => s.Key)
+            .ToList();
+
+        if (rootSecrets.Count > 0)
+        {
+            var rootFolderNode = new ApiKeyTreeNode
+            {
+                Name = "(Sin Carpeta)",
+                DisplayText = $"Sin Carpeta ({rootSecrets.Count} secreto{(rootSecrets.Count == 1 ? "" : "s")})",
+                Icon = "📂",
+                IsFolder = true,
+                FolderName = null,
+                IsSelected = false,
+                IsExpanded = true
+            };
+
+            foreach (var s in rootSecrets)
+            {
+                var secretNode = new ApiKeyTreeNode
+                {
+                    Name = s.Key,
+                    DisplayText = s.Key + (string.IsNullOrEmpty(s.Environment) ? "" : $" [{s.Environment}]"),
+                    FullKey = s.FullKey,
+                    Icon = "🔑",
+                    IsFolder = false,
+                    FolderName = null,
+                    Parent = rootFolderNode,
+                    IsSelected = false
+                };
+                rootFolderNode.Children.Add(secretNode);
+            }
+
+            _apiKeyTreeNodes.Add(rootFolderNode);
+        }
+
+        tvApiKeyPermissions.ItemsSource = _apiKeyTreeNodes;
     }
 
     private void AccessLevel_Changed(object sender, RoutedEventArgs e)
@@ -425,36 +919,46 @@ public partial class MainWindow : Window
             : Visibility.Collapsed;
     }
 
-    private void SecretFilter_TextChanged(object sender, TextChangedEventArgs e)
+    private void SecretTreeFilter_TextChanged(object sender, TextChangedEventArgs e)
     {
         var filter = txtSecretFilter.Text.Trim();
-
-        if (string.IsNullOrEmpty(filter))
+        foreach (var node in _apiKeyTreeNodes)
         {
-            lstSecretsCheckboxes.ItemsSource = _secretSelectionItems;
-        }
-        else
-        {
-            var filtered = _secretSelectionItems
-                .Where(s => s.Key.Contains(filter, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            lstSecretsCheckboxes.ItemsSource = filtered;
+            node.ApplyFilter(filter);
         }
     }
 
-    private void SelectAllSecrets_Click(object sender, RoutedEventArgs e)
+    private void SelectAllTreeSecrets_Click(object sender, RoutedEventArgs e)
     {
-        foreach (var item in _secretSelectionItems)
+        foreach (var node in _apiKeyTreeNodes)
         {
-            item.IsSelected = true;
+            node.SetIsSelected(true, updateChildren: true, updateParent: false);
         }
     }
 
-    private void SelectNoSecrets_Click(object sender, RoutedEventArgs e)
+    private void SelectNoTreeSecrets_Click(object sender, RoutedEventArgs e)
     {
-        foreach (var item in _secretSelectionItems)
+        foreach (var node in _apiKeyTreeNodes)
         {
-            item.IsSelected = false;
+            node.SetIsSelected(false, updateChildren: true, updateParent: false);
+        }
+    }
+
+    private void ToggleExpandTree_Click(object sender, RoutedEventArgs e)
+    {
+        _isTreeExpanded = !_isTreeExpanded;
+        SetTreeExpanded(_apiKeyTreeNodes, _isTreeExpanded);
+    }
+
+    private void SetTreeExpanded(IEnumerable<ApiKeyTreeNode> nodes, bool expanded)
+    {
+        foreach (var node in nodes)
+        {
+            node.IsExpanded = expanded;
+            if (node.Children.Count > 0)
+            {
+                SetTreeExpanded(node.Children, expanded);
+            }
         }
     }
 
@@ -470,17 +974,21 @@ public partial class MainWindow : Window
 
             if (permissions.Level == AccessLevel.Full)
             {
-                message = $"Access Level: Full Access\n\nCan access ALL secrets.";
+                message = "Nivel: Acceso Total\n\nPuede acceder a TODOS los secretos y proyectos del baúl.";
                 NotificationService.ShowInfo($"API Key: {apiKey.Name}", message, 8);
             }
             else
             {
+                var prefixes = permissions.AllowedPrefixes.Count > 0
+                    ? string.Join(", ", permissions.AllowedPrefixes)
+                    : "(ninguno)";
+
                 var secretsCount = permissions.AllowedSecrets.Count;
                 var secretsList = secretsCount > 0
-                    ? string.Join(", ", permissions.AllowedSecrets.Take(5)) + (secretsCount > 5 ? $" (+{secretsCount - 5} more)" : "")
-                    : "(none)";
+                    ? string.Join(", ", permissions.AllowedSecrets.Take(6)) + (secretsCount > 6 ? $" (+{secretsCount - 6} más)" : "")
+                    : "(ninguno)";
 
-                message = $"Access: Restricted\nSecrets: {secretsList}\nCan List: {(permissions.CanList ? "Yes" : "No")}";
+                message = $"Nivel: Restringido\nCarpetas/Proyectos: {prefixes}\nSecretos Individuales ({secretsCount}): {secretsList}\nListar: {(permissions.CanList ? "Sí" : "No")}";
                 NotificationService.ShowInfo($"API Key: {apiKey.Name}", message, 10);
             }
         }
@@ -492,15 +1000,14 @@ public partial class MainWindow : Window
 
         if (string.IsNullOrWhiteSpace(name))
         {
-            NotificationService.ShowWarning("Validation", "Please enter a name for the API Key.");
+            NotificationService.ShowWarning("Validación", "Ingresa un nombre para la API Key.");
             return;
         }
 
-        // Determinar nivel de acceso y permisos
         AccessLevel accessLevel;
-        List<string> allowedSecrets = [];
-        List<string> allowedPrefixes = [];
-        bool canList;
+        var allowedSecrets = new List<string>();
+        var allowedPrefixes = new List<string>();
+        var canList = chkCanList.IsChecked == true;
 
         if (rbFullAccess.IsChecked == true)
         {
@@ -511,32 +1018,30 @@ public partial class MainWindow : Window
         {
             accessLevel = AccessLevel.Restricted;
 
-            // Obtener secretos seleccionados de los checkboxes
-            allowedSecrets = _secretSelectionItems
-                .Where(s => s.IsSelected)
-                .Select(s => s.Key)
-                .ToList();
-
-            canList = chkCanList.IsChecked == true;
-
-            // Validar que tenga al menos un secreto seleccionado
-            if (allowedSecrets.Count == 0)
+            foreach (var rootNode in _apiKeyTreeNodes)
             {
-                NotificationService.ShowWarning("Validation", "Please select at least one secret for this API Key to access.");
+                rootNode.CollectSelectedKeys(allowedSecrets, allowedPrefixes);
+            }
+
+            if (allowedPrefixes.Count == 0 && allowedSecrets.Count == 0)
+            {
+                NotificationService.ShowWarning("Validación", "Selecciona al menos una Carpeta/Proyecto o un Secreto en el árbol.");
                 return;
             }
         }
 
-        var permissions = new ApiKeyPermissions(accessLevel, allowedSecrets, allowedPrefixes, canList);
-
-        // Generar nueva API Key
-        var (apiKey, keyHash) = ApiKeyService.GenerateApiKey();
+        var (rawApiKey, keyHash) = ApiKeyService.GenerateApiKey();
+        var permissions = new ApiKeyPermissions(
+            accessLevel, 
+            allowedSecrets.Distinct(StringComparer.OrdinalIgnoreCase).ToList(), 
+            allowedPrefixes.Distinct(StringComparer.OrdinalIgnoreCase).ToList(), 
+            canList);
 
         var newApiKey = new ApiKeyEntry(
             Guid.NewGuid(),
             name,
             keyHash,
-            $"Generated on {DateTime.Now:yyyy-MM-dd HH:mm}",
+            null,
             DateTime.Now,
             null,
             true,
@@ -545,36 +1050,13 @@ public partial class MainWindow : Window
         _apiKeys.Add(newApiKey);
         await SaveApiKeysAsync();
 
-        // Actualizar servidor
-        _secretServer.UpdateApiKeys(_apiKeys);
-        _secretServer.RequireAuthentication = true;
-
-        // Mostrar la API Key generada
-        txtGeneratedKey.Text = apiKey;
+        txtGeneratedKey.Text = rawApiKey;
         pnlGeneratedKey.Visibility = Visibility.Visible;
 
-        // Limpiar formulario
         txtNewKeyName.Text = "";
-        txtSecretFilter.Text = "";
         rbFullAccess.IsChecked = true;
-        foreach (var item in _secretSelectionItems)
-        {
-            item.IsSelected = false;
-        }
-        chkCanList.IsChecked = false;
 
-        // Refrescar lista
-        lstApiKeys.ItemsSource = null;
-        lstApiKeys.ItemsSource = _apiKeys;
-
-        UpdateStatusBar();
-    }
-
-    private void CopyApiKeyButton_Click(object sender, RoutedEventArgs e)
-    {
-        Clipboard.SetText(txtGeneratedKey.Text);
-        NotificationService.ShowSuccess("Copied", "API Key copied to clipboard. Store it securely - it won't be shown again.", 5);
-        pnlGeneratedKey.Visibility = Visibility.Collapsed;
+        NotificationService.ShowSuccess("API Key Generada", $"API Key '{name}' creada con éxito.", 4);
     }
 
     private async void DeleteApiKeyButton_Click(object sender, RoutedEventArgs e)
@@ -585,34 +1067,34 @@ public partial class MainWindow : Window
             if (apiKey == null) return;
 
             var confirmed = await DialogService.ConfirmDangerousAsync(
-                "Revoke API Key",
-                $"Are you sure you want to revoke the API Key '{apiKey.Name}'?\n\nApplications using this key will lose access immediately.",
-                "Revoke",
-                "Cancel");
+                "Revocar API Key",
+                $"¿Revocar la API Key '{apiKey.Name}'?\n\nLas aplicaciones que usen esta clave perderán acceso inmediatamente.",
+                "Revocar",
+                "Cancelar");
 
             if (confirmed)
             {
                 _apiKeys.Remove(apiKey);
                 await SaveApiKeysAsync();
 
-                // Actualizar servidor
-                _secretServer.UpdateApiKeys(_apiKeys);
-                _secretServer.RequireAuthentication = _apiKeys.Count > 0;
-
-                // Refrescar lista
-                lstApiKeys.ItemsSource = null;
-                lstApiKeys.ItemsSource = _apiKeys;
-
-                UpdateStatusBar();
-
-                NotificationService.ShowSuccess("Revoked", $"API Key '{apiKey.Name}' has been revoked.", 4);
+                NotificationService.ShowSuccess("Revocada", $"API Key '{apiKey.Name}' ha sido revocada.", 3);
             }
+        }
+    }
+
+    private void CopyApiKeyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(txtGeneratedKey.Text))
+        {
+            Clipboard.SetText(txtGeneratedKey.Text);
+            NotificationService.ShowSuccess("Copiado", "API Key copiada al portapapeles.", 2);
         }
     }
 
     private void CloseApiKeysButton_Click(object sender, RoutedEventArgs e)
     {
         pnlApiKeys.Visibility = Visibility.Collapsed;
+        txtGeneratedKey.Text = "";
         pnlGeneratedKey.Visibility = Visibility.Collapsed;
     }
 
@@ -622,27 +1104,26 @@ public partial class MainWindow : Window
 
     private void AuditLogButton_Click(object sender, RoutedEventArgs e)
     {
-        RefreshAuditLog();
+        RefreshAuditLogs();
         pnlAuditLog.Visibility = Visibility.Visible;
     }
 
-    private void RefreshAuditLog()
+    private void RefreshAuditLogs()
     {
-        // Obtener estadísticas
         var stats = _secretServer.AuditService.GetStatistics();
-        txtTotalRequests.Text = stats.TotalRequests.ToString();
-        txtSuccessRequests.Text = stats.SuccessfulRequests.ToString();
-        txtFailedRequests.Text = stats.FailedRequests.ToString();
-        txtUniqueClients.Text = stats.UniqueApiKeys.ToString();
+        txtTotalRequests.Text = stats.TotalRequests.ToString("N0");
+        txtSuccessRequests.Text = stats.SuccessfulRequests.ToString("N0");
+        txtFailedRequests.Text = stats.FailedRequests.ToString("N0");
+        txtUniqueClients.Text = stats.UniqueApiKeys.ToString("N0");
 
-        // Obtener logs recientes
         var logs = _secretServer.AuditService.GetRecentLogs(200);
         lstAuditLogs.ItemsSource = logs;
     }
 
     private void RefreshAuditLogButton_Click(object sender, RoutedEventArgs e)
     {
-        RefreshAuditLog();
+        RefreshAuditLogs();
+        NotificationService.ShowSuccess("Actualizado", "Registro de auditoría actualizado.", 1);
     }
 
     private void CloseAuditLogButton_Click(object sender, RoutedEventArgs e)
@@ -654,15 +1135,11 @@ public partial class MainWindow : Window
 
     #region Backup (Export/Import)
 
-    private readonly VaultExportService _exportService = new();
-
     private void BackupButton_Click(object sender, RoutedEventArgs e)
     {
         txtExportPassword.Password = "";
         txtExportPasswordConfirm.Password = "";
         txtImportPassword.Password = "";
-        chkOverwriteExisting.IsChecked = false;
-        chkImportApiKeys.IsChecked = true;
         pnlBackup.Visibility = Visibility.Visible;
     }
 
@@ -674,31 +1151,29 @@ public partial class MainWindow : Window
     private async void ExportVaultButton_Click(object sender, RoutedEventArgs e)
     {
         var password = txtExportPassword.Password;
-        var confirmPassword = txtExportPasswordConfirm.Password;
+        var confirm = txtExportPasswordConfirm.Password;
 
-        // Validaciones
         if (string.IsNullOrWhiteSpace(password))
         {
-            NotificationService.ShowWarning("Validation", "Please enter an export password.");
+            NotificationService.ShowWarning("Validación", "Ingresa una contraseña para el respaldo.");
+            return;
+        }
+
+        if (password != confirm)
+        {
+            NotificationService.ShowWarning("Validación", "Las contraseñas no coinciden.");
             return;
         }
 
         if (password.Length < 8)
         {
-            NotificationService.ShowWarning("Validation", "Export password must be at least 8 characters.");
+            NotificationService.ShowWarning("Validación", "La contraseña debe tener al menos 8 caracteres.");
             return;
         }
 
-        if (password != confirmPassword)
-        {
-            NotificationService.ShowWarning("Validation", "Passwords do not match.");
-            return;
-        }
-
-        // Seleccionar archivo de destino
         var saveDialog = new Microsoft.Win32.SaveFileDialog
         {
-            Title = "Export Vault",
+            Title = "Exportar Baúl",
             Filter = "Arca Vault Backup (*.arcavault)|*.arcavault",
             DefaultExt = ".arcavault",
             FileName = $"arca-backup-{DateTime.Now:yyyy-MM-dd}"
@@ -711,14 +1186,14 @@ public partial class MainWindow : Window
         {
             await _exportService.ExportAsync(_secrets, _apiKeys, password, saveDialog.FileName);
 
-            NotificationService.ShowSuccess("Export Complete",
-                $"Vault exported successfully.\n{_secrets.Count} secrets, {_apiKeys.Count} API Keys.", 5);
+            NotificationService.ShowSuccess("Exportación Completa",
+                $"Baúl exportado con éxito.\n{_secrets.Count} secretos, {_apiKeys.Count} API Keys.", 5);
 
             pnlBackup.Visibility = Visibility.Collapsed;
         }
         catch (Exception ex)
         {
-            NotificationService.ShowError("Export Failed", $"Failed to export vault: {ex.Message}");
+            NotificationService.ShowError("Error de Exportación", $"Error al exportar baúl: {ex.Message}");
         }
     }
 
@@ -728,14 +1203,13 @@ public partial class MainWindow : Window
 
         if (string.IsNullOrWhiteSpace(password))
         {
-            NotificationService.ShowWarning("Validation", "Please enter the import password.");
+            NotificationService.ShowWarning("Validación", "Ingresa la contraseña del archivo de respaldo.");
             return;
         }
 
-        // Seleccionar archivo
         var openDialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Import Vault",
+            Title = "Importar Baúl",
             Filter = "Arca Vault Backup (*.arcavault)|*.arcavault",
             DefaultExt = ".arcavault"
         };
@@ -745,18 +1219,16 @@ public partial class MainWindow : Window
 
         try
         {
-            // Verificar que sea un archivo válido
             if (!await _exportService.IsValidExportFileAsync(openDialog.FileName))
             {
-                NotificationService.ShowError("Invalid File", "The selected file is not a valid Arca vault backup.");
+                NotificationService.ShowError("Archivo Inválido", "El archivo no es un respaldo válido de Arca.");
                 return;
             }
 
-            // Cargar datos
             var exportData = await _exportService.LoadExportFileAsync(openDialog.FileName, password);
             if (exportData == null)
             {
-                NotificationService.ShowError("Import Failed", "Failed to read the backup file.");
+                NotificationService.ShowError("Error de Importación", "No se pudo leer el archivo de respaldo.");
                 return;
             }
 
@@ -766,10 +1238,16 @@ public partial class MainWindow : Window
             int secretsImported = 0, secretsSkipped = 0;
             int apiKeysImported = 0, apiKeysSkipped = 0;
 
-            // Importar secretos
             foreach (var secret in exportData.Secrets)
             {
-                var existing = _secrets.FirstOrDefault(s => s.Key.Equals(secret.Key, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrWhiteSpace(secret.Folder))
+                {
+                    _knownFolders.Add(secret.Folder.Trim());
+                }
+
+                var existing = _secrets.FirstOrDefault(s =>
+                    s.Key.Equals(secret.Key, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(s.Folder, secret.Folder, StringComparison.OrdinalIgnoreCase));
 
                 if (existing != null)
                 {
@@ -779,6 +1257,8 @@ public partial class MainWindow : Window
                         _secrets[index] = existing with
                         {
                             Value = secret.Value,
+                            Folder = secret.Folder,
+                            Environment = secret.Environment,
                             Description = secret.Description,
                             ModifiedAt = DateTime.Now
                         };
@@ -795,77 +1275,105 @@ public partial class MainWindow : Window
                         Guid.NewGuid(),
                         secret.Key,
                         secret.Value,
+                        secret.Folder,
                         secret.Description,
+                        secret.Environment,
+                        secret.Tags,
                         DateTime.Now,
                         null));
                     secretsImported++;
                 }
             }
 
-            // Importar API Keys (sin el hash, solo como referencia)
-            if (importApiKeys)
-            {
-                foreach (var apiKey in exportData.ApiKeys)
-                {
-                    var existing = _apiKeys.FirstOrDefault(k => k.Name.Equals(apiKey.Name, StringComparison.OrdinalIgnoreCase));
+            SaveKnownFolders();
 
-                    if (existing != null)
+            if (importApiKeys && exportData.ApiKeys != null)
+            {
+                foreach (var key in exportData.ApiKeys)
+                {
+                    var existing = _apiKeys.FirstOrDefault(k => k.Name.Equals(key.Name, StringComparison.OrdinalIgnoreCase));
+
+                    if (existing == null)
                     {
-                        apiKeysSkipped++;
+                        if (Enum.TryParse<AccessLevel>(key.AccessLevel, out var level))
+                        {
+                            var permissions = new ApiKeyPermissions(level, key.AllowedSecrets ?? [], [], key.CanList);
+                            var importedKey = new ApiKeyEntry(
+                                Guid.NewGuid(),
+                                key.Name,
+                                ApiKeyService.ComputeHash(Guid.NewGuid().ToString("N")),
+                                key.Description,
+                                key.CreatedAt,
+                                null,
+                                false,
+                                permissions);
+
+                            _apiKeys.Add(importedKey);
+                            apiKeysImported++;
+                        }
                     }
                     else
                     {
-                        // Crear API Key inactiva (necesita regenerarse)
-                        var level = Enum.TryParse<AccessLevel>(apiKey.AccessLevel, out var parsed)
-                            ? parsed
-                            : AccessLevel.Restricted;
-
-                        var permissions = new ApiKeyPermissions(
-                            level,
-                            apiKey.AllowedSecrets,
-                            [],
-                            apiKey.CanList);
-
-                        _apiKeys.Add(new ApiKeyEntry(
-                            Guid.NewGuid(),
-                            $"{apiKey.Name} (imported)",
-                            "", // Sin hash - necesita regenerarse
-                            apiKey.Description,
-                            DateTime.Now,
-                            null,
-                            false, // Inactiva
-                            permissions));
-                        apiKeysImported++;
+                        apiKeysSkipped++;
                     }
                 }
             }
 
-            // Guardar cambios
             await SaveSecretsAsync();
-            await SaveApiKeysAsync();
+            if (importApiKeys)
+            {
+                await SaveApiKeysAsync();
+            }
 
             UpdateSecretCount();
+            RefreshFolders();
             RefreshList();
 
-            var message = $"Imported: {secretsImported} secrets";
-            if (secretsSkipped > 0) message += $", {secretsSkipped} skipped";
-            if (importApiKeys) message += $"\nAPI Keys: {apiKeysImported} imported";
-            if (apiKeysSkipped > 0) message += $", {apiKeysSkipped} skipped";
-            message += $"\n\nFrom: {exportData.ExportedFrom} ({exportData.ExportedAt:g})";
+            var message = $"Importación finalizada:\n- Secretos: {secretsImported} importados, {secretsSkipped} omitidos.";
+            if (importApiKeys)
+            {
+                message += $"\n- API Keys: {apiKeysImported} importadas (inactivas).";
+            }
 
-            NotificationService.ShowSuccess("Import Complete", message, 8);
-
+            NotificationService.ShowSuccess("Importación Completa", message, 6);
             pnlBackup.Visibility = Visibility.Collapsed;
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("password"))
-        {
-            NotificationService.ShowError("Wrong Password", "The password is incorrect or the file is corrupted.");
         }
         catch (Exception ex)
         {
-            NotificationService.ShowError("Import Failed", $"Failed to import vault: {ex.Message}");
+            NotificationService.ShowError("Error de Importación", $"Error al importar baúl: {ex.Message}");
         }
     }
 
     #endregion
+
+    protected override void OnKeyDown(System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Escape)
+        {
+            CloseAllOpenModals();
+            e.Handled = true;
+        }
+        base.OnKeyDown(e);
+    }
+
+    private void CloseAllOpenModals()
+    {
+        if (pnlApiKeys.Visibility == Visibility.Visible) pnlApiKeys.Visibility = Visibility.Collapsed;
+        if (pnlAuditLog.Visibility == Visibility.Visible) pnlAuditLog.Visibility = Visibility.Collapsed;
+        if (pnlBackup.Visibility == Visibility.Visible) pnlBackup.Visibility = Visibility.Collapsed;
+        if (pnlDialog.Visibility == Visibility.Visible) pnlDialog.Visibility = Visibility.Collapsed;
+        if (pnlMoveDialog.Visibility == Visibility.Visible) pnlMoveDialog.Visibility = Visibility.Collapsed;
+        if (pnlFolderDialog.Visibility == Visibility.Visible) pnlFolderDialog.Visibility = Visibility.Collapsed;
+    }
+
+    private void LockButton_Click(object sender, RoutedEventArgs e)
+    {
+        _secretServer.Stop();
+        Array.Clear(_derivedKey, 0, _derivedKey.Length);
+
+        if (Application.Current is App app)
+        {
+            app.ShowLoginWindow();
+        }
+    }
 }

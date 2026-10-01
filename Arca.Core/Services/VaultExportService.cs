@@ -1,4 +1,4 @@
-using Arca.Core.Entities;
+ï»¿using Arca.Core.Entities;
 using Konscious.Security.Cryptography;
 using System.IO.Compression;
 using System.Security.Cryptography;
@@ -20,7 +20,10 @@ public sealed record ExportedSecret
 {
     public required string Key { get; init; }
     public required string Value { get; init; }
+    public string? Folder { get; init; }
     public string? Description { get; init; }
+    public string? Environment { get; init; }
+    public List<string>? Tags { get; init; }
     public required DateTime CreatedAt { get; init; }
 }
 
@@ -62,16 +65,16 @@ public sealed class ImportResult
     public static ImportResult Failed(string error)
         => new() { Success = false, Error = error };
 }
+
 public sealed class VaultExportService
 {
     private const string MagicHeader = "ARCAEXPORT";
-    private const int CurrentVersion = 2; // Version 2 usa Argon2id
+    private const int CurrentVersion = 2;
     private const int SaltSize = 16;
     private const int KeySize = 32;
 
-    // Parámetros Argon2id (consistentes con KeyDerivationService)
     private const int Argon2Parallelism = 4;
-    private const int Argon2MemorySize = 65536; // 64 MB
+    private const int Argon2MemorySize = 65536;
     private const int Argon2Iterations = 3;
 
     public async Task ExportAsync(
@@ -92,7 +95,10 @@ public sealed class VaultExportService
             {
                 Key = s.Key,
                 Value = s.Value,
+                Folder = s.Folder,
                 Description = s.Description,
+                Environment = s.Environment,
+                Tags = s.Tags,
                 CreatedAt = s.CreatedAt
             }).ToList(),
             ApiKeys = apiKeys.Select(k => new ExportedApiKey
@@ -108,7 +114,6 @@ public sealed class VaultExportService
 
         var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(exportData, new JsonSerializerOptions { WriteIndented = false });
 
-        // Comprimir
         using var compressedStream = new MemoryStream();
         await using (var gzip = new GZipStream(compressedStream, CompressionLevel.Optimal, leaveOpen: true))
         {
@@ -116,11 +121,9 @@ public sealed class VaultExportService
         }
         var compressedData = compressedStream.ToArray();
 
-        // Generar salt y derivar clave con Argon2id
         var salt = RandomNumberGenerator.GetBytes(SaltSize);
         var key = DeriveKeyArgon2id(exportPassword, salt);
 
-        // Cifrar con AES-GCM
         var nonce = RandomNumberGenerator.GetBytes(12);
         var tag = new byte[16];
         var ciphertext = new byte[compressedData.Length];
@@ -128,7 +131,6 @@ public sealed class VaultExportService
         using var aes = new AesGcm(key, 16);
         aes.Encrypt(nonce, compressedData, ciphertext, tag);
 
-        // Escribir archivo
         await using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write);
         await using var writer = new BinaryWriter(fileStream);
 
@@ -166,7 +168,6 @@ public sealed class VaultExportService
         var ciphertextLength = reader.ReadInt32();
         var ciphertext = reader.ReadBytes(ciphertextLength);
 
-        // Derivar clave (Argon2id para v2, PBKDF2 para v1)
         var key = version >= 2
             ? DeriveKeyArgon2id(exportPassword, salt)
             : DeriveKeyPbkdf2Legacy(exportPassword, salt);
@@ -183,7 +184,6 @@ public sealed class VaultExportService
             throw new InvalidOperationException("Invalid password or corrupted file.");
         }
 
-        // Descomprimir
         using var compressedStream = new MemoryStream(plaintext);
         using var decompressedStream = new MemoryStream();
         await using (var gzip = new GZipStream(compressedStream, CompressionMode.Decompress))
@@ -225,7 +225,6 @@ public sealed class VaultExportService
         return argon2.GetBytes(KeySize);
     }
 
-    // Mantener compatibilidad con archivos v1 exportados con PBKDF2
     private static byte[] DeriveKeyPbkdf2Legacy(string password, byte[] salt)
     {
         return Rfc2898DeriveBytes.Pbkdf2(password, salt, 100000, HashAlgorithmName.SHA256, KeySize);

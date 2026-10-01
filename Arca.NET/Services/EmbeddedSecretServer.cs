@@ -41,9 +41,18 @@ public sealed class EmbeddedSecretServer : IDisposable
         _secrets.Clear();
         foreach (var secret in secrets)
         {
-            _secrets[secret.Key] = secret;
+            _secrets[secret.FullKey] = secret;
+
+            if (string.IsNullOrWhiteSpace(secret.Folder))
+            {
+                _secrets[secret.Key] = secret;
+            }
+            else if (!_secrets.ContainsKey(secret.Key))
+            {
+                _secrets[secret.Key] = secret;
+            }
         }
-        Debug.WriteLine($"[EmbeddedSecretServer] Secrets updated: {_secrets.Count} secrets loaded");
+        Debug.WriteLine($"[EmbeddedSecretServer] Secrets updated: {_secrets.Count} entries indexed");
     }
 
     public void UpdateApiKeys(IEnumerable<ApiKeyEntry> apiKeys)
@@ -385,12 +394,23 @@ public sealed class EmbeddedSecretServer : IDisposable
             s.Equals(secretKey, StringComparison.OrdinalIgnoreCase)))
             return true;
 
-        // Verificar prefijos permitidos (ej: "ConnectionStrings:*" permite "ConnectionStrings:Database")
+        // Verificar prefijos permitidos (ej: "PortalClientes:*" permite "PortalClientes:ConnectionStrings:cadena")
         foreach (var prefix in permissions.AllowedPrefixes)
         {
             var prefixPattern = prefix.TrimEnd('*');
             if (secretKey.StartsWith(prefixPattern, StringComparison.OrdinalIgnoreCase))
                 return true;
+
+            // Si se busca por clave relativa, verificar si existe en la carpeta del prefijo
+            if (_secrets.TryGetValue(secretKey, out var entry) && !string.IsNullOrWhiteSpace(entry.Folder))
+            {
+                var folderPrefix = prefixPattern.TrimEnd(':');
+                if (entry.Folder.Equals(folderPrefix, StringComparison.OrdinalIgnoreCase) ||
+                    entry.Folder.StartsWith(folderPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
         }
 
         return false;
@@ -489,6 +509,16 @@ public sealed class EmbeddedSecretServer : IDisposable
         {
             return $"OK|{secret.Value}|{secret.Description ?? ""}";
         }
+
+        var match = _secrets.Values.FirstOrDefault(s =>
+            s.Key.Equals(key, StringComparison.OrdinalIgnoreCase) ||
+            s.FullKey.Equals(key, StringComparison.OrdinalIgnoreCase));
+
+        if (match != null)
+        {
+            return $"OK|{match.Value}|{match.Description ?? ""}";
+        }
+
         return "NOTFOUND";
     }
 

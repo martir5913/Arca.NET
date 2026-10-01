@@ -15,4 +15,6 @@ public interface IArcaClient : IDisposable
     Task<bool> KeyExistsAsync(string key, CancellationToken cancellationToken = default);
 
     Task<bool> IsAvailableAsync(CancellationToken cancellationToken = default);
+
+    Task<Dictionary<string, string>> GetFolderSecretsAsync(string folderName, bool stripFolderPrefix = true, CancellationToken cancellationToken = default);
 }

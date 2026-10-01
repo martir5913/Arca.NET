@@ -1,12 +1,13 @@
 # Arca.NET
 
 <p align="center">
-  <strong>Gestor de secretos seguro y local para aplicaciones .NET</strong>
+  <strong>Gestor de secretos seguro, moderno y local para aplicaciones .NET</strong>
 </p>
 
 <p align="center">
   <a href="#características">Características</a> •
   <a href="#instalación">Instalación</a> •
+  <a href="#organización-por-carpetas--proyectos">Carpetas & Proyectos</a> •
   <a href="#sdk">SDK</a> •
   <a href="#decisiones-técnicas">ADR</a> •
   <a href="#licencia">Licencia</a>
@@ -16,53 +17,45 @@
 
 ## ¿Qué es Arca.NET?
 
-Gestor de secretos **100% local** para Windows. Almacena credenciales, API keys y connection strings de forma cifrada, accesibles via SDK para tus aplicaciones .NET.
+Gestor de secretos **100% local** para Windows. Almacena credenciales, API keys y connection strings de forma cifrada en tu máquina, accesibles vía SDK con latencia ultrarrápida (< 1ms) para tus aplicaciones .NET.
 
-| Problema | Solución |
-|----------|----------|
-| Credenciales en código fuente | Vault cifrado externo |
-| Sin control de acceso | API Keys con permisos granulares |
-| Sin auditoría | Log de cada acceso |
-| Dependencia cloud | Local, <1ms latencia |
-
-## Video Tutorial
-
-[![Demo de Arca.NET](https://img.youtube.com/vi/ID_DEL_VIDEO/0.jpg)](https://www.youtube.com/watch?v=pMngnWOl9oo&t)
+| Problema | Solución de Arca.NET |
+|---|---|
+| Credenciales en código fuente / config | Baúl local cifrado con Argon2id + AES-GCM |
+| Colisión de claves entre múltiples proyectos | **Organización por Carpetas / Proyectos** |
+| Acceso indiscriminado a todos los secretos | **API Keys con alcance por Carpeta** o Secreto |
+| Sin trazabilidad de accesos | Registro de auditoría detallado en tiempo real |
+| Dependencia de servicios en la nube | 100% local, funciona sin internet (air-gapped) |
 
 ---
 
 ## Características
 
-- **AES-256-GCM** + **Argon2id** para cifrado
-- **API Keys** con permisos por secreto
-- **Auditoría** completa de accesos
-- **Export/Import** entre servidores
-- **Named Pipes** (<1ms latencia)
-- **System Tray** (segundo plano)
+- 🛡️ **AES-256-GCM** + **Argon2id** para cifrado de grado militar.
+- 🗂️ **Explorador por Carpetas / Proyectos**: Organiza tus secretos de forma limpia sin colisiones de nombres.
+- 🔑 **API Keys Granulares**: Asigna permisos a carpetas completas (`PortalClientes:*`) o a claves específicas.
+- 🎲 **Generador Integrado**: Generador de contraseñas seguras y llaves criptográficas AES-256 (Base64).
+- 📋 **Auditoría Completa**: Monitorea qué aplicación y API Key consumió cada secreto.
+- 📦 **Copia de Seguridad (Backup/Restore)**: Exportación e importación cifrada entre servidores.
+- ⚡ **Named Pipes Ultrarrápidos (<1ms)** con auto-descubrimiento y soporte para IIS (ApplicationPoolIdentity) y Servicios de Windows.
+- 🖥️ **Bandeja del Sistema (System Tray)**: Permanece activo en segundo plano mientras tus aplicaciones lo consumen.
 
 ---
 
-## Casos de Uso
+## Organización por Carpetas / Proyectos
 
-### Servidor con múltiples aplicaciones
-
-```
-+------------------------------------------------+
-¦              Servidor Windows                  ¦
-¦                                                ¦
-¦  Arca.NET --> vault.vlt (cifrado)              ¦
-¦     ¦                                          ¦
-¦     +-- SAP App    (API Key: solo SAP_*)       ¦
-¦     +-- Web API    (API Key: solo DB_*)        ¦
-¦     +-- Worker     (API Key: solo SMTP_*)      ¦
-+------------------------------------------------+
-```
-
-### Múltiples servidores
+Con Arca.NET puedes clasificar tus secretos por aplicación o contexto (ej. `PortalClientes`, `BridgeSap`, `Finanzas`):
 
 ```
-Servidor SAP              Servidor Automatizaciones
-   vault.vlt    --Export/Import--?    vault.vlt
+┌─────────────────────────┬────────────────────────────────────────────────────────┐
+│  PROYECTOS / CARPETAS   │  🗂️ PortalClientes (3 secretos)        [+ Nuevo] [🔍] │
+├─────────────────────────┼────────────────────────────────────────────────────────┤
+│  📁 Todos (8)           │  🔑 ConnectionStrings:cadena                           │
+│  📂 Sin Carpeta (2)     │     Data Source=sql.prod...             👁️ 📋 ✏️ 🗑️     │
+│  ──────────────────     │  ────────────────────────────────────────────────────  │
+│  🗂️ PortalClientes (3)  │  🔑 JwtSettings:SecretKey                              │
+│  🗂️ BridgeSap (3)       │     ********************                👁️ 📋 ✏️ 🗑️     │
+└─────────────────────────┴────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -77,7 +70,7 @@ cd Arca.NET
 dotnet run --project Arca.NET
 ```
 
-### Ubicación del Vault
+### Ubicación del Baúl
 
 ```
 %LOCALAPPDATA%\Arca\
@@ -88,9 +81,7 @@ dotnet run --project Arca.NET
 
 ---
 
-## SDK
-
-**Compatibilidad:** .NET 10+ y .NET Framework 4.8+
+## SDK (.NET 10+ y .NET Framework 4.8+)
 
 ### Instalación
 
@@ -98,86 +89,52 @@ dotnet run --project Arca.NET
 dotnet add package Arca.SDK
 ```
 
-```powershell
-# Visual Studio — Package Manager Console
-Install-Package Arca.SDK
-```
-
-### Uso
+### Consumo Rápido
 
 ```csharp
-using Arca.SDK.Clients;
+using Arca.SDK;
 
-var apiKey = Environment.GetEnvironmentVariable("ARCA_API_KEY");
-using var arca = new ArcaSimpleClient(apiKey);
-
-if (await arca.IsAvailableAsync())
+// Inyección de dependencias en Program.cs
+builder.Services.AddArcaClient(options =>
 {
-    var connString = await arca.GetSecretValueAsync("ConnectionStrings:DB");
+    options.ApiKey = builder.Configuration["Arca:ApiKey"];
+    options.Timeout = TimeSpan.FromSeconds(5);
+});
+
+// En tus servicios:
+public class MiServicio(IArcaClient arca)
+{
+    public async Task IniciarAsync()
+    {
+        // Secreto individual:
+        string sqlConn = await arca.GetSecretValueAsync("ConnectionStrings:cadena");
+
+        // Todos los secretos de una carpeta:
+        Dictionary<string, string> sapSecrets = await arca.GetFolderSecretsAsync("BridgeSap");
+    }
 }
 ```
 
-### Manejo de errores
-
-```csharp
-try {
-    var secret = await arca.GetSecretValueAsync("MiClave");
-}
-catch (ArcaAccessDeniedException) { /* Sin permiso */ }
-catch (ArcaSecretNotFoundException) { /* No existe */ }
-catch (ArcaException) { /* Error de conexión o timeout */ }
-```
-
-**Documentación completa:** [Arca.SDK/README.md](Arca.SDK/README.md)
+**Documentación completa del SDK:** [Arca.SDK/README.md](Arca.SDK/README.md)
 
 ---
 
 ## Decisiones Técnicas (ADR)
 
 | Decisión | Justificación |
-|----------|---------------|
-| **AES-256-GCM** | AEAD: cifrado + autenticación en una operación |
-| **Argon2id** | Memory-hard, resistente a GPU/ASIC (OWASP recommended) |
-| **Named Pipes** | Solo local, <1ms, sin configuración de red |
-| **API Keys granulares** | Mínimo privilegio, revocación sin afectar otras apps |
-| **Formato binario** | Validación rápida, versionado, mínimo overhead |
-| **100% local** | Sin telemetría, funciona air-gapped |
-
----
-
-## Estructura
-
-```
-Arca.NET/
-+-- Arca.Core/           # Entidades, interfaces
-+-- Arca.Infrastructure/ # Cifrado, persistencia
-+-- Arca.SDK/            # Cliente para apps externas
-+-- Arca.NET/            # UI WPF + servidor
-+-- Arca.Daemon/         # Windows Service (opcional)
-```
+|---|---|
+| **AES-256-GCM** | AEAD: cifrado + autenticación de integridad en una sola operación |
+| **Argon2id** | Memory-hard, resistente a ataques por GPU/ASIC (OWASP recomendado) |
+| **Named Pipes Aislados** | Comunicación inter-proceso local en memoria (<1ms), sin abrir puertos de red |
+| **API Keys por Carpeta** | Principio de mínimo privilegio para microservicios y sistemas empresariales |
+| **Compatibilidad Total** | Deserialización JSON retrocompatible con baúles de versiones previas |
 
 ---
 
 ## Licencia
 
-**Source Available License**
-
-| Permitido | No permitido |
-|--------------|-----------------|
-| Uso personal | Venta |
-| Uso interno corporativo | Redistribución comercial |
-| Modificación propia | Sublicenciar |
-
-**Archivo:** [LICENSE](LICENSE)
-
----
-
-## Roadmap v2.0
-
-- Expiración de API Keys
-- Backup automático
-- Tags/Categorías
-- gRPC remoto (mTLS)
+**Source Available License** (Consulte [LICENSE.txt](LICENSE.txt)).  
+El **Arca.SDK** se distribuye bajo licencia de código abierto **MIT** (Consulte [LICENSE.SDK](LICENSE.SDK)).
 
 ---
 
