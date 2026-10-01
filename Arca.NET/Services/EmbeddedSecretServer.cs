@@ -391,8 +391,15 @@ public sealed class EmbeddedSecretServer : IDisposable
             return true;
 
         if (permissions.AllowedSecrets.Any(s =>
-            s.Equals(secretKey, StringComparison.OrdinalIgnoreCase)))
+            s.Equals(secretKey, StringComparison.OrdinalIgnoreCase) ||
+            s.EndsWith($":{secretKey}", StringComparison.OrdinalIgnoreCase)))
             return true;
+
+        if (_secrets.TryGetValue(secretKey, out var matchedSecret) &&
+            permissions.AllowedSecrets.Any(s => s.Equals(matchedSecret.FullKey, StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
 
         // Verificar prefijos permitidos (ej: "PortalClientes:*" permite "PortalClientes:ConnectionStrings:cadena")
         foreach (var prefix in permissions.AllowedPrefixes)
