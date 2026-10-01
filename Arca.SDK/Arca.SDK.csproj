@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <!-- Configuración básica -->
@@ -9,7 +9,7 @@
 
     <!-- Información del paquete NuGet -->
     <PackageId>Arca.SDK</PackageId>
-    <Version>1.1</Version>
+    <Version>1.3.0</Version>
     <Authors>Martir_Dev</Authors>
     <Company>Develop Martir</Company>
     <Description>SDK para acceder a credenciales almacenadas en Arca Vault de forma segura y rápida. Proporciona comunicación via Named Pipes con latencia menor a 1ms.</Description>
@@ -31,8 +31,8 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <Title>Arca.SDK</Title>
-    <AssemblyVersion>1.0.7.0</AssemblyVersion>
-    <FileVersion>1.0.7.0</FileVersion>
+    <AssemblyVersion>1.3.0.0</AssemblyVersion>
+    <FileVersion>1.3.0.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>

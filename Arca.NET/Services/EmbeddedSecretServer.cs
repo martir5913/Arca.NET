@@ -1,4 +1,4 @@
-﻿using Arca.Core.Common;
+using Arca.Core.Common;
 using Arca.Core.Entities;
 using Arca.Core.Security;
 using Arca.Core.Services;
@@ -28,9 +28,11 @@ public sealed class EmbeddedSecretServer : IDisposable
 
     public AuditService AuditService => _auditService;
 
-    public EmbeddedSecretServer()
+    public EmbeddedSecretServer(string? customPipeName = null)
     {
-        _pipeName = $"{ArcaConstants.PipeName}-simple";
+        _pipeName = string.IsNullOrWhiteSpace(customPipeName)
+            ? ArcaConstants.GetUserPipeName()
+            : customPipeName;
         _auditService = new AuditService();
     }
 
@@ -87,7 +89,6 @@ public sealed class EmbeddedSecretServer : IDisposable
         {
             Debug.WriteLine("[EmbeddedSecretServer] ?? WARNING: Authentication is DISABLED. Any application can access secrets.");
             Debug.WriteLine("[EmbeddedSecretServer] ?? This should only be used for development purposes.");
-            // Log de auditor�a para modo inseguro
             LogAudit("SYSTEM", "", "SERVER_START", null, true, "WARNING: Server started WITHOUT authentication");
         }
         else
@@ -101,13 +102,12 @@ public sealed class EmbeddedSecretServer : IDisposable
         if (!_isRunning) return;
 
         Debug.WriteLine("[EmbeddedSecretServer] Stopping server...");
-
         _isRunning = false;
         _cts?.Cancel();
 
+        // Enviar un ping dummy para desbloquear WaitForConnectionAsync
         try
         {
-            // Crear una conexi�n dummy para desbloquear WaitForConnectionAsync
             using var dummyClient = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut);
             dummyClient.Connect(100);
         }
@@ -115,7 +115,7 @@ public sealed class EmbeddedSecretServer : IDisposable
 
         try
         {
-            _serverTask?.Wait(TimeSpan.FromSeconds(2));
+            _serverTask?.Wait(500);
         }
         catch { }
 
@@ -132,12 +132,7 @@ public sealed class EmbeddedSecretServer : IDisposable
 
             try
             {
-                pipeServer = new NamedPipeServerStream(
-                    _pipeName,
-                    PipeDirection.InOut,
-                    NamedPipeServerStream.MaxAllowedServerInstances,
-                    PipeTransmissionMode.Byte,
-                    PipeOptions.Asynchronous);
+                pipeServer = CreatePipeServerStream();
 
                 await pipeServer.WaitForConnectionAsync(cancellationToken);
 
@@ -193,21 +188,28 @@ public sealed class EmbeddedSecretServer : IDisposable
         {
             var pipeSecurity = new PipeSecurity();
 
-            // 1. Permitir acceso Read/Write a usuarios autenticados locales (incluye IIS, servicios y otros usuarios)
+            // 1. Permitir acceso Read/Write a Todos (WorldSid: Cuentas virtuales de IIS AppPool, IIS_IUSRS, servicios y usuarios locales)
+            var worldSid = new SecurityIdentifier(WellKnownSidType.WorldSid, null);
+            pipeSecurity.AddAccessRule(new PipeAccessRule(
+                worldSid,
+                PipeAccessRights.ReadWrite,
+                AccessControlType.Allow));
+
+            // 2. Permitir acceso Read/Write a usuarios autenticados locales
             var authenticatedUsersSid = new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null);
             pipeSecurity.AddAccessRule(new PipeAccessRule(
                 authenticatedUsersSid,
                 PipeAccessRights.ReadWrite,
                 AccessControlType.Allow));
 
-            // 2. Permitir acceso Read/Write al grupo BuiltinUsers (usuarios estándar e identidades locales)
+            // 3. Permitir acceso Read/Write al grupo BuiltinUsers
             var builtinUsersSid = new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null);
             pipeSecurity.AddAccessRule(new PipeAccessRule(
                 builtinUsersSid,
                 PipeAccessRights.ReadWrite,
                 AccessControlType.Allow));
 
-            // 3. Otorgar FullControl al usuario actual que ejecuta el servidor
+            // 4. Otorgar FullControl al usuario actual que ejecuta el servidor
             var currentUser = WindowsIdentity.GetCurrent().User;
             if (currentUser != null)
             {
@@ -252,29 +254,26 @@ public sealed class EmbeddedSecretServer : IDisposable
             var request = Encoding.UTF8.GetString(buffer, 0, bytesRead).TrimEnd('\r', '\n');
             Debug.WriteLine($"[EmbeddedSecretServer] Request: {request}");
 
-            // Parsear comando: COMANDO|API_KEY|PARAMETROS
             var parts = request.Split('|');
             var command = parts[0].ToUpperInvariant();
-
             string response;
 
-            // STATUS no requiere autenticaci�n (para verificar si el servidor est� corriendo)
+            // STATUS y AUTH se manejan antes de verificar permisos de API Key
             if (command == "STATUS")
             {
                 response = HandleStatus();
             }
-            // AUTH verifica si una API Key es v�lida
             else if (command == "AUTH" && parts.Length >= 2)
             {
                 response = HandleAuth(parts[1]);
             }
-            // Todos los dem�s comandos requieren autenticaci�n
             else if (RequireAuthentication)
             {
+                // Formato con auth: COMANDO|API_KEY|PARAM1|PARAM2...
                 if (parts.Length < 2)
                 {
-                    response = "ERROR|API Key required. Use: COMMAND|API_KEY|PARAMS";
-                    LogAudit("Unknown", "", command, null, false, "API Key not provided");
+                    response = "ERROR|Authentication required. Provide API Key.";
+                    LogAudit("Unknown", "", command, null, false, "Missing API Key");
                 }
                 else
                 {
@@ -283,13 +282,13 @@ public sealed class EmbeddedSecretServer : IDisposable
 
                     if (!isValid)
                     {
-                        response = "ERROR|Invalid or expired API Key";
-                        LogAudit("Invalid", "", command, parts.Length > 2 ? parts[2] : null, false, "Invalid API Key");
+                        response = "ERROR|Invalid API Key";
+                        LogAudit("Unknown", "", command, null, false, "Invalid API Key");
                         Debug.WriteLine("[EmbeddedSecretServer] Unauthorized access attempt");
                     }
                     else
                     {
-                        // Notificar uso de API Key
+                        // Registrar uso de la API Key
                         var keyHash = ApiKeyService.ComputeHash(apiKey);
                         ApiKeyUsed?.Invoke(this, keyHash);
 
@@ -300,7 +299,7 @@ public sealed class EmbeddedSecretServer : IDisposable
             }
             else
             {
-                // Modo sin autenticaci�n (desarrollo)
+                // Modo sin autenticación (desarrollo)
                 response = ProcessUnauthenticatedCommand(command, parts);
             }
 
@@ -355,7 +354,6 @@ public sealed class EmbeddedSecretServer : IDisposable
 
             case "LIST":
             case "KEYS":
-
                 if (!CanListSecrets(keyEntry))
                 {
                     response = "ERROR|Access denied - cannot list secrets";
@@ -420,7 +418,7 @@ public sealed class EmbeddedSecretServer : IDisposable
             keys = _secrets.Keys.Where(k => HasPermissionToAccess(keyEntry, k));
         }
 
-        // Aplicar filtro adicional si se especific�
+        // Aplicar filtro adicional si se especificó
         if (!string.IsNullOrWhiteSpace(filter))
         {
             keys = keys.Where(k => k.Contains(filter, StringComparison.OrdinalIgnoreCase));

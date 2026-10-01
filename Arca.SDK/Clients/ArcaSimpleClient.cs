@@ -10,9 +10,26 @@ public sealed class ArcaSimpleClient : IArcaClient
     private readonly int _timeoutMs;
     private readonly string? _apiKey;
 
-    public ArcaSimpleClient(string? apiKey = null, TimeSpan? timeout = null)
+    public ArcaSimpleClient()
+        : this(null, null, null, null)
     {
-        _pipeName = $"{ArcaConstants.PipeName}-simple";
+    }
+
+    public ArcaSimpleClient(
+        string? apiKey = null,
+        TimeSpan? timeout = null,
+        string? targetUser = null,
+        string? customPipeName = null)
+    {
+        if (!string.IsNullOrWhiteSpace(customPipeName))
+        {
+            _pipeName = customPipeName!;
+        }
+        else
+        {
+            _pipeName = ArcaConstants.GetUserPipeName(targetUser);
+        }
+
         _timeoutMs = (int)(timeout ?? TimeSpan.FromMilliseconds(ArcaConstants.DefaultTimeoutMs)).TotalMilliseconds;
         _apiKey = apiKey;
     }
@@ -207,7 +224,7 @@ public sealed class ArcaSimpleClient : IArcaClient
             if (!status.IsUnlocked)
                 return false;
 
-            // Si requiere autenticaciÛn, verificar que tengamos una API Key v·lida
+            // Si requiere autenticacion, verificar que tengamos una API Key valida
             if (status.RequiresAuthentication)
             {
                 if (string.IsNullOrEmpty(_apiKey))
@@ -223,56 +240,137 @@ public sealed class ArcaSimpleClient : IArcaClient
         }
         catch (ArcaException ex)
         {
-            // Arca no est· corriendo, vault bloqueado, timeout, etc. ó se considera no disponible.
+            // Arca no esta corriendo, vault bloqueado, timeout, etc. -> se considera no disponible.
             Debug.WriteLine($"[ArcaSimpleClient] IsAvailableAsync: {ex.GetType().Name}: {ex.Message}");
             return false;
         }
     }
+
+    private string? _resolvedPipeName;
 
     private async Task<string> SendCommandAsync(string command, CancellationToken cancellationToken)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(_timeoutMs);
 
+        var (pipeClient, connectedPipe) = await ConnectPipeAsync(cts.Token).ConfigureAwait(false);
 #if NET48
-        using var pipeClient = new NamedPipeClientStream(
+        using (pipeClient)
 #else
-        await using var pipeClient = new NamedPipeClientStream(
+        await using (pipeClient)
 #endif
-            serverName: ".",
-            pipeName: _pipeName,
-            direction: PipeDirection.InOut,
-            options: PipeOptions.Asynchronous);
-
-        try
         {
+            try
+            {
+                var commandBytes = Encoding.UTF8.GetBytes(command + "\n");
+                await pipeClient.WriteAsync(commandBytes, 0, commandBytes.Length, cts.Token).ConfigureAwait(false);
+                await pipeClient.FlushAsync(cts.Token).ConfigureAwait(false);
+
+                var buffer = new byte[4096];
+                var bytesRead = await pipeClient.ReadAsync(buffer, 0, buffer.Length, cts.Token).ConfigureAwait(false);
+
+                return Encoding.UTF8.GetString(buffer, 0, bytesRead).TrimEnd('\r', '\n');
+            }
+            catch (Exception ex)
+            {
+                _resolvedPipeName = null;
+                throw new ArcaException($"Failed to communicate with Arca on pipe '{connectedPipe}': {ex.Message}", ex);
+            }
+        }
+    }
+
+    private async Task<(NamedPipeClientStream Stream, string PipeName)> ConnectPipeAsync(CancellationToken cancellationToken)
+    {
+        // 1. Si ya se resolvi√≥ un pipe previamente, intentar conectar a √©l primero
+        if (!string.IsNullOrEmpty(_resolvedPipeName))
+        {
+            try
+            {
+                var stream = new NamedPipeClientStream(".", _resolvedPipeName!, PipeDirection.InOut, PipeOptions.Asynchronous);
 #if NET48
-            await pipeClient.ConnectAsync(_timeoutMs).ConfigureAwait(false);
+                await stream.ConnectAsync(Math.Min(_timeoutMs, 1000)).ConfigureAwait(false);
 #else
-            await pipeClient.ConnectAsync(_timeoutMs, cts.Token).ConfigureAwait(false);
+                using var probeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                probeCts.CancelAfter(Math.Min(_timeoutMs, 1000));
+                await stream.ConnectAsync(probeCts.Token).ConfigureAwait(false);
 #endif
+                return (stream, _resolvedPipeName!);
+            }
+            catch
+            {
+                _resolvedPipeName = null;
+            }
+        }
 
-            var commandBytes = Encoding.UTF8.GetBytes(command + "\n");
-            await pipeClient.WriteAsync(commandBytes, 0, commandBytes.Length, cts.Token).ConfigureAwait(false);
-            await pipeClient.FlushAsync(cts.Token).ConfigureAwait(false);
+        // 2. Construir lista de candidatos prioritarios
+        var candidates = new List<string>();
 
-            var buffer = new byte[4096];
-            var bytesRead = await pipeClient.ReadAsync(buffer, 0, buffer.Length, cts.Token).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(_pipeName))
+            candidates.Add(_pipeName);
 
-            return Encoding.UTF8.GetString(buffer, 0, bytesRead).TrimEnd('\r', '\n');
-        }
-        catch (TimeoutException)
+        if (!candidates.Contains(ArcaConstants.LegacyPipeName, StringComparer.OrdinalIgnoreCase))
+            candidates.Add(ArcaConstants.LegacyPipeName);
+
+        if (!candidates.Contains(ArcaConstants.PipeName, StringComparer.OrdinalIgnoreCase))
+            candidates.Add(ArcaConstants.PipeName);
+
+        // Auto-descubrimiento en Windows si ning√∫n candidato b√°sico responde
+        if (IsWindowsPlatform())
         {
-            throw new ArcaException("Connection to Arca timed out. Is the application running?");
+            try
+            {
+                var discovered = Directory.GetFiles(@"\\.\pipe\", "arca-vault*")
+                    .Select(Path.GetFileName)
+                    .Where(p => !string.IsNullOrWhiteSpace(p));
+
+                foreach (var pipe in discovered)
+                {
+                    if (!candidates.Contains(pipe!, StringComparer.OrdinalIgnoreCase))
+                    {
+                        candidates.Add(pipe!);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[ArcaSimpleClient] Pipe discovery warning: {ex.Message}");
+            }
         }
-        catch (OperationCanceledException)
+
+        var probeTimeoutMs = candidates.Count > 1 ? Math.Max(350, _timeoutMs / candidates.Count) : _timeoutMs;
+
+        foreach (var candidate in candidates)
         {
-            throw new ArcaException("Operation was cancelled or timed out.");
+            try
+            {
+                var stream = new NamedPipeClientStream(".", candidate, PipeDirection.InOut, PipeOptions.Asynchronous);
+#if NET48
+                await stream.ConnectAsync(probeTimeoutMs).ConfigureAwait(false);
+#else
+                using var probeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                probeCts.CancelAfter(probeTimeoutMs);
+                await stream.ConnectAsync(probeCts.Token).ConfigureAwait(false);
+#endif
+                _resolvedPipeName = candidate;
+                Debug.WriteLine($"[ArcaSimpleClient] Connected successfully to Arca pipe: {candidate}");
+                return (stream, candidate);
+            }
+            catch
+            {
+                // Intentar con el siguiente candidato
+            }
         }
-        catch (Exception ex)
-        {
-            throw new ArcaException($"Failed to connect to Arca: {ex.Message}", ex);
-        }
+
+        throw new ArcaException($"Connection to Arca timed out. Could not connect to any active pipe ({string.Join(", ", candidates)}). Is the Arca desktop application running and unlocked?");
+    }
+
+    private static bool IsWindowsPlatform()
+    {
+#if NET48
+        return Environment.OSVersion.Platform == PlatformID.Win32NT;
+#else
+        return OperatingSystem.IsWindows();
+#endif
     }
 
     // string.Contains(string, StringComparison) no existe en .NET Framework 4.8
@@ -281,6 +379,6 @@ public sealed class ArcaSimpleClient : IArcaClient
 
     public void Dispose()
     {
-        // No hay recursos que liberar :v quien lo diria 
+        // No hay recursos que liberar
     }
 }

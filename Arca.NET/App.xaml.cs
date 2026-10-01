@@ -1,4 +1,4 @@
-﻿using Arca.NET.Services;
+using Arca.NET.Services;
 using Arca.NET.Views;
 using System.Windows;
 using Application = System.Windows.Application;
@@ -7,6 +7,7 @@ namespace Arca.NET;
 
 public partial class App : Application
 {
+    private static Mutex? _instanceMutex;
     private TrayIconService? _trayIcon;
     private LoginWindow? _loginWindow;
     private MainWindow? _mainWindow;
@@ -17,6 +18,21 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        var mutexName = $@"Local\ArcaNET_{Environment.UserName.ToLowerInvariant()}";
+        _instanceMutex = new Mutex(true, mutexName, out bool isNewInstance);
+
+        if (!isNewInstance)
+        {
+            System.Windows.MessageBox.Show(
+                $"Arca.NET ya se encuentra en ejecución para el usuario '{Environment.UserName}'.\n\nRevisa el icono en la bandeja del sistema (junto al reloj).",
+                "Arca.NET",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            Shutdown();
+            return;
+        }
+
         base.OnStartup(e);
 
         // Inicializar el icono de la bandeja del sistema
@@ -33,6 +49,18 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _trayIcon?.Dispose();
+
+        if (_instanceMutex != null)
+        {
+            try
+            {
+                _instanceMutex.ReleaseMutex();
+            }
+            catch { }
+            _instanceMutex.Dispose();
+            _instanceMutex = null;
+        }
+
         base.OnExit(e);
     }
 
