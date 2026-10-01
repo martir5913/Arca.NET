@@ -1,149 +1,191 @@
-# Arca.SDK
+# Arca.SDK 🔐
 
-SDK oficial para acceder a credenciales almacenadas en **Arca Vault** de forma segura, local y ultra-rápida mediante Named Pipes (< 1ms de latencia).
-
-## Novedades en v1.3.0
-- 🗂️ **Gestión por Carpetas / Proyectos**: Organiza tus secretos por proyecto (`PortalClientes`, `BridgeSap`, etc.) y recupéralos agrupados o individuales.
-- 🔑 **API Keys con alcance por Proyecto**: Asigna permisos a carpetas completas mediante prefijos (`PortalClientes:*`).
-- 🔄 **Auto-descubrimiento y Resiliencia de Pipes**: Descubrimiento inteligente de pipes activos y compatibilidad transparente con IIS y servicios de Windows.
-- ⚡ **Método `GetFolderSecretsAsync`**: Descarga y mapea todos los secretos de un proyecto en una sola llamada.
+**Arca.SDK** es el cliente oficial y de alto rendimiento para interactuar con **Arca.NET Vault**. Permite recuperar secretos y configuraciones confidenciales en aplicaciones .NET en tiempo real a través de Windows Named Pipes con latencia inferior a **1 milisegundo**.
 
 ---
 
-## Compatibilidad
+## 🚀 Características del SDK
 
-| Framework | Versión mínima |
-|---|---|
-| .NET | 10.0 o superior |
-| .NET Framework | 4.8 o superior |
+- ⚡ **Latencia Ultra-Baja (< 1ms):** Comunicación local en memoria vía Named Pipes sin sobrecarga HTTP/TLS.
+- 🗂️ **Gestión por Carpetas / Proyectos:** Recupera secretos agrupados (`GetFolderSecretsAsync("MiProyecto")`) o individuales (`GetSecretValueAsync`).
+- 🔑 **Autenticación por API Key:** Validación criptográfica segura contra el servidor con soporte para alcances restringidos.
+- 🔄 **Auto-Descubrimiento Inteligente:** Detecta automáticamente la instancia activa del servidor en Windows.
+- 🏢 **Soporte IIS y Servicios Windows:** Funciona fluidamente entre identidades (`IIS APPPOOL`, `NETWORK SERVICE`) especificando `TargetUser`.
+- 🧩 **Inyección de Dependencias Nativa:** Integración limpia en ASP.NET Core y Worker Services mediante `AddArcaClient()`.
+- 📦 **Multi-Targeting:** Compatible con **.NET 10+** y **.NET Framework 4.8+**.
 
 ---
 
-## Instalación
+## 📦 Instalación
 
-**.NET CLI**
+### .NET CLI
 ```bash
 dotnet add package Arca.SDK
 ```
 
-**Package Manager Console (Visual Studio)**
+### Visual Studio Package Manager Console
 ```powershell
 Install-Package Arca.SDK
 ```
 
+### Referencia directa de proyecto
+```xml
+<ItemGroup>
+  <ProjectReference Include="..\Arca.SDK\Arca.SDK.csproj" />
+</ItemGroup>
+```
+
 ---
 
-## Uso en .NET (ASP.NET Core / .NET 10+)
+## 💻 Ejemplos de Integración y Pruebas
 
-### 1. Inyección de Dependencias (Recomendado)
-
-En tu `Program.cs`:
+### 1. ASP.NET Core & Inyección de Dependencias (.NET 10 / .NET 8 / .NET 6)
 
 ```csharp
+// Program.cs
 using Arca.SDK;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Registrar cliente de Arca
+// Registro de Arca en el contenedor de servicios
 builder.Services.AddArcaClient(options =>
 {
-    options.ApiKey = builder.Configuration["Arca:ApiKey"]; // o Environment.GetEnvironmentVariable("ARCA_API_KEY")
-    // Opcional para IIS o servicios bajo otra identidad:
-    // options.TargetUser = "tu_usuario_windows";
+    // API Key generada desde la interfaz de Arca.NET
+    options.ApiKey = builder.Configuration["Arca:ApiKey"] 
+                     ?? Environment.GetEnvironmentVariable("ARCA_API_KEY");
+    
+    // Timeout de conexión opcional (por defecto: 5 segundos)
     options.Timeout = TimeSpan.FromSeconds(5);
+
+    // Opcional para IIS con ApplicationPoolIdentity:
+    // options.TargetUser = "usuario_windows_servidor";
 });
+
+var app = builder.Build();
 ```
 
-### 2. Consumo en Servicios / Controladores
+#### Inyección en Servicios / Controladores:
 
 ```csharp
-public class FacturacionService
+using Arca.SDK;
+using Arca.SDK.Exceptions;
+
+public class OrderProcessingService
 {
     private readonly IArcaClient _arca;
+    private readonly ILogger<OrderProcessingService> _logger;
 
-    public FacturacionService(IArcaClient arca)
+    public OrderProcessingService(IArcaClient arca, ILogger<OrderProcessingService> logger)
     {
         _arca = arca;
+        _logger = logger;
     }
 
-    public async Task ProcesarAsync()
+    public async Task ProcessOrderAsync()
     {
-        // Obtener un secreto específico
-        string sqlConn = await _arca.GetSecretValueAsync("ConnectionStrings:cadena");
-        string jwtKey = await _arca.GetSecretValueAsync("JwtSettings:SecretKey");
+        try
+        {
+            // 1. Obtener un secreto específico:
+            string paymentApiKey = await _arca.GetSecretValueAsync("Pagos:StripeApiKey");
 
-        // O recuperar todos los secretos de un proyecto/carpeta:
-        Dictionary<string, string> sapSecrets = await _arca.GetFolderSecretsAsync("BridgeSap");
-        string apiKey = sapSecrets["BridgeSap:ApiKey"];
+            // 2. Obtener todos los secretos de una carpeta en una sola llamada:
+            Dictionary<string, string> dbConfigs = await _arca.GetFolderSecretsAsync("BasesDeDatos");
+            string connectionString = dbConfigs["BasesDeDatos:SqlConnectionString"];
+
+            _logger.LogInformation("Secretos obtenidos exitosamente.");
+        }
+        catch (ArcaAccessDeniedException)
+        {
+            _logger.LogError("La API Key no tiene permisos para acceder a estos secretos.");
+            throw;
+        }
+        catch (ArcaSecretNotFoundException ex)
+        {
+            _logger.LogError("El secreto {SecretKey} no existe en el baúl.", ex.Key);
+            throw;
+        }
+        catch (ArcaException ex)
+        {
+            _logger.LogError("El baúl está bloqueado o el servidor Arca no está corriendo: {Message}", ex.Message);
+            throw;
+        }
     }
 }
 ```
 
 ---
 
-## Uso Directo / Scripts / Consola
+### 2. Uso Directo / Scripts de Consola / Background Workers
 
 ```csharp
+using System;
+using System.Threading.Tasks;
 using Arca.SDK.Clients;
+using Arca.SDK.Exceptions;
 
-// Si Arca corre en tu usuario, el SDK auto-descubre el pipe activo
-using var arca = new ArcaSimpleClient(apiKey: "arca_tu_api_key_aqui");
-
-if (await arca.IsAvailableAsync())
+class Program
 {
-    var status = await arca.GetStatusAsync();
-    Console.WriteLine($"Baúl abierto con {status.SecretCount} secretos.");
+    static async Task Main()
+    {
+        // Crear cliente autónomo
+        using var client = new ArcaSimpleClient(apiKey: "arca_tu_api_key");
 
-    var secret = await arca.GetSecretValueAsync("PortalClientes:ConnectionStrings:cadena");
-    Console.WriteLine($"Conexión: {secret}");
+        // 1. Verificar si el servidor Arca está activo
+        bool isOnline = await client.IsAvailableAsync();
+        if (!isOnline)
+        {
+            Console.WriteLine("⚠️ Arca no está disponible o la API Key no es válida.");
+            return;
+        }
+
+        // 2. Obtener estado del baúl
+        var status = await client.GetStatusAsync();
+        Console.WriteLine($"✅ Baúl activo: {status.SecretCount} secretos cargados.");
+
+        // 3. Listar claves expuestas para esta API Key
+        var keys = await client.ListKeysAsync();
+        Console.WriteLine($"Claves autorizadas ({keys.Count}):");
+        foreach (var key in keys)
+        {
+            Console.WriteLine($" - {key}");
+        }
+
+        // 4. Recuperar valor de un secreto
+        string dbSecret = await client.GetSecretValueAsync("PortalWeb:Database:Password");
+        Console.WriteLine($"Valor obtenido correctamente: {dbSecret.Length} caracteres.");
+    }
 }
 ```
 
 ---
 
-## Manejo de Excepciones
+### 3. Aplicaciones en IIS / Windows Services (Multi-Identidad)
 
-```csharp
-try
-{
-    var secret = await arca.GetSecretValueAsync("MiProyecto:ApiKey");
-}
-catch (ArcaAccessDeniedException)
-{
-    // La API Key no tiene permisos para este secreto o carpeta
-}
-catch (ArcaSecretNotFoundException ex)
-{
-    // El secreto no existe en el baúl
-    Console.WriteLine($"Clave no encontrada: {ex.Key}");
-}
-catch (ArcaException ex)
-{
-    // El baúl está bloqueado, cerrado o hubo error de comunicación
-    Console.WriteLine($"Error de comunicación con Arca: {ex.Message}");
-}
-```
-
----
-
-## Soporte para IIS / Multi-Usuario / Servicios
-
-Si tu aplicación corre en **IIS** (bajo identidades como `IIS APPPOOL\DefaultAppPool`), **IIS Express** o un **Servicio de Windows**:
-
-1. En la aplicación Arca Desktop, el baúl está abierto bajo tu usuario (ej. `fmartir`).
-2. En la aplicación cliente (IIS), simplemente especifica `TargetUser`:
+Cuando tu aplicativo web corre bajo IIS con un Application Pool dedicado (ej. `IIS APPPOOL\MiSitio`) y la aplicación de escritorio Arca.NET está ejecutándose en la sesión de tu usuario:
 
 ```csharp
 builder.Services.AddArcaClient(options =>
 {
     options.ApiKey = "arca_tu_api_key";
-    options.TargetUser = "fmartir"; // Usuario donde corre Arca Desktop
+    options.TargetUser = "fmartir"; // Usuario de Windows donde está abierto Arca
 });
 ```
-*(Nota: Gracias al auto-descubrimiento en Windows, si solo hay una instancia abierta de Arca en la máquina, el SDK se conectará automáticamente incluso si no especificas `TargetUser`).*
 
 ---
 
-## Licencia
+## 🛡️ Excepciones y Diagnóstico
 
-Este SDK está distribuido bajo la licencia [MIT](LICENSE.txt).
+| Excepción | Causa | Acción Recomendada |
+|---|---|---|
+| `ArcaAccessDeniedException` | La API Key no tiene asignada la carpeta o el secreto solicitado. | Editar la API Key en Arca.NET y marcar el secreto en el árbol. |
+| `ArcaSecretNotFoundException` | La clave solicitada no existe en el baúl. | Verificar el nombre de la clave en el panel de Arca.NET. |
+| `ArcaAuthenticationException` | API Key inválida, inactiva o revocada. | Generar una nueva API Key en Arca.NET. |
+| `ArcaException` | El baúl está cerrado, bloqueado o el servidor no ha sido iniciado. | Abrir y desbloquear Arca.NET con la contraseña maestra. |
+
+---
+
+## 📄 Licencia
+
+Distribuido bajo la **[Licencia MIT](../LICENSE.txt)**.
+
+Copyright (c) 2026 Ing. Fredy Martir.

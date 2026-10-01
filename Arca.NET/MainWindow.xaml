@@ -1749,7 +1749,7 @@
                             <Border Background="#16213e" CornerRadius="6" Padding="14" BorderBrush="#223354" BorderThickness="1">
                                 <StackPanel>
                                     <TextBlock Text="📜 Licencia y Ecosistema" FontWeight="Bold" Foreground="#a8bbd9" FontSize="13" Margin="0,0,0,6"/>
-                                    <TextBlock Text="Arca.NET Core / Daemon / Application (Source Available) • Arca.SDK (MIT License)&#x0a;Compatible con .NET 10, .NET 8, .NET 6 y .NET Framework 4.8+"
+                                    <TextBlock Text="Arca.NET Suite &amp; Arca.SDK están licenciados bajo Open Source MIT License.&#x0a;Compatible con .NET 10, .NET 8, .NET 6 y .NET Framework 4.8+"
                                                Foreground="#8e9bb0" FontSize="11" LineHeight="16"/>
                                 </StackPanel>
                             </Border>
