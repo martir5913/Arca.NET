@@ -57,7 +57,7 @@ Evita exponer credenciales, cadenas de conexión SQL o llaves de API en archivos
 
 ## Formatos de Nombres de Secretos
 
-Para consumir secretos desde el SDK, puedes utilizar dos formatos según tu necesidad:
+Para consumir secretos desde el SDK, puedes utilizar los siguientes formatos según tu necesidad:
 
 ### 1. Formato Completo con Carpeta (Recomendado)
 Estructura: `NombreCarpeta:NombreSecreto`
@@ -70,18 +70,36 @@ string jwtKey  = await client.GetSecretValueAsync("PortalWeb:JwtSettings:SecretK
 ### 2. Formato Corto / Relativo
 Estructura: `NombreSecreto` (sin prefijo de carpeta)
 ```csharp
-// Válido cuando la API Key tiene permisos sobre la carpeta correspondiente:
+// Válido cuando la API Key está restringida a la carpeta correspondiente.
+// Arca resuelve el secreto de forma segura dentro de su ámbito autorizado:
 string sqlConn = await client.GetSecretValueAsync("ConnectionStrings:Sql");
 string jwtKey  = await client.GetSecretValueAsync("JwtSettings:SecretKey");
 ```
 
-### 3. Carpeta Completa
+### 3. Recuperación de Carpeta Completa
 Descarga todos los secretos de un proyecto en un `Dictionary<string, string>` en un solo viaje de memoria (< 1ms):
 ```csharp
+// Por defecto stripFolderPrefix = true: entrega las claves limpias listas para IConfiguration
 Dictionary<string, string> carpeta = await client.GetFolderSecretsAsync("PortalWeb");
 
-string sqlConn = carpeta["PortalWeb:ConnectionStrings:Sql"];
+string sqlConn = carpeta["ConnectionStrings:Sql"];
+
+// Si prefieres conservar el prefijo completo:
+// Dictionary<string, string> carpeta = await client.GetFolderSecretsAsync("PortalWeb", stripFolderPrefix: false);
+// string sqlConn = carpeta["PortalWeb:ConnectionStrings:Sql"];
 ```
+
+---
+
+## Seguridad y Aislamiento de API Keys (*Principio de Menor Privilegio*)
+
+Arca.NET implementa un modelo estricto de **Denegación por Defecto (*Default Deny*)**:
+
+- **Aislamiento por Carpeta:** Una API Key restringida a `PortalWeb:*` **únicamente** puede listar y obtener secretos de dicha carpeta.
+- **Protección de la Raíz:** Los secretos globales o huérfanos que residan en la **Raíz del baúl (Sin Carpeta)** son invisibles e inaccesibles para API Keys restringidas a proyectos, evitando fugas cruzadas accidentales.
+- **Resolución Segura de Nombres:** Si una aplicación solicita una clave relativa como `"ConnectionStrings:Sql"`, Arca la resolverá **únicamente** dentro de las carpetas autorizadas de la API Key. Nunca devolverá un secreto de la raíz ni de otros proyectos.
+- **Listado Restringido:** `client.ListKeysAsync()` devuelve estrictamente el subconjunto de claves canónicas concedidas a la API Key, sin exponer inventarios ajenos.
+
 
 ---
 

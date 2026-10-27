@@ -42,15 +42,6 @@ public sealed class EmbeddedSecretServer : IDisposable
         foreach (var secret in secrets)
         {
             _secrets[secret.FullKey] = secret;
-
-            if (string.IsNullOrWhiteSpace(secret.Folder))
-            {
-                _secrets[secret.Key] = secret;
-            }
-            else if (!_secrets.ContainsKey(secret.Key))
-            {
-                _secrets[secret.Key] = secret;
-            }
         }
         Debug.WriteLine($"[EmbeddedSecretServer] Secrets updated: {_secrets.Count} entries indexed");
     }
@@ -330,35 +321,56 @@ public sealed class EmbeddedSecretServer : IDisposable
         // Formato: COMANDO|API_KEY|PARAM1|PARAM2...
         var secretKey = parts.Length > 2 ? parts[2] : null;
         string response;
-        bool success;
 
         switch (command)
         {
             case "GET" when parts.Length >= 3:
-                // Verificar permiso para acceder a este secreto
-                if (!HasPermissionToAccess(keyEntry, parts[2]))
+                var requestedKey = parts[2];
+                var secretToGet = FindAuthorizedSecret(requestedKey, keyEntry);
+                if (secretToGet == null)
                 {
-                    response = "ERROR|Access denied to this secret";
-                    LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "GET", parts[2], false, "Access denied - insufficient permissions");
+                    bool existsSomewhere = _secrets.ContainsKey(requestedKey) ||
+                                          _secrets.Values.Any(s => s.Key.Equals(requestedKey, StringComparison.OrdinalIgnoreCase));
+
+                    if (existsSomewhere)
+                    {
+                        response = "ERROR|Access denied to this secret";
+                        LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "GET", requestedKey, false, "Access denied - insufficient permissions");
+                    }
+                    else
+                    {
+                        response = "NOTFOUND";
+                        LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "GET", requestedKey, false, "Secret not found");
+                    }
                     break;
                 }
-                response = HandleGet(parts[2]);
-                success = response.StartsWith("OK");
-                LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "GET", parts[2], success,
-                    success ? null : response.Replace("NOTFOUND", "Secret not found"));
+
+                response = $"OK|{secretToGet.Value}|{secretToGet.Description ?? ""}";
+                LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "GET", secretToGet.FullKey, true, null);
                 break;
 
             case "EXISTS" when parts.Length >= 3:
-                // Verificar permiso para verificar este secreto
-                if (!HasPermissionToAccess(keyEntry, parts[2]))
+                var checkKey = parts[2];
+                var secretToCheck = FindAuthorizedSecret(checkKey, keyEntry);
+                if (secretToCheck == null)
                 {
-                    response = "FALSE"; // No revelar si existe o no
-                    LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "EXISTS", parts[2], false, "Access denied - insufficient permissions");
+                    response = "FALSE";
+                    bool existsSomewhere = _secrets.ContainsKey(checkKey) ||
+                                          _secrets.Values.Any(s => s.Key.Equals(checkKey, StringComparison.OrdinalIgnoreCase));
+
+                    if (existsSomewhere)
+                    {
+                        LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "EXISTS", checkKey, false, "Access denied - insufficient permissions");
+                    }
+                    else
+                    {
+                        LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "EXISTS", checkKey, true, null);
+                    }
                     break;
                 }
-                response = HandleExists(parts[2]);
-                success = true;
-                LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "EXISTS", parts[2], true, null);
+
+                response = "TRUE";
+                LogAudit(keyEntry.Name, keyEntry.Id.ToString(), "EXISTS", secretToCheck.FullKey, true, null);
                 break;
 
             case "LIST":
@@ -383,44 +395,126 @@ public sealed class EmbeddedSecretServer : IDisposable
         return response;
     }
 
-    private bool HasPermissionToAccess(ApiKeyEntry keyEntry, string secretKey)
+    private SecretEntry? FindAuthorizedSecret(string key, ApiKeyEntry? keyEntry)
     {
+        if (string.IsNullOrWhiteSpace(key))
+            return null;
+
+        // Si es una API Key restringida
+        if (RequireAuthentication && keyEntry != null && keyEntry.Permissions.Level == AccessLevel.Restricted)
+        {
+            var permissions = keyEntry.Permissions;
+
+            // A. Buscar coincidencia exacta por FullKey
+            if (_secrets.TryGetValue(key, out var directSecret))
+            {
+                if (HasPermissionToSecret(keyEntry, directSecret))
+                {
+                    return directSecret;
+                }
+            }
+
+            // B. Si es una clave relativa (ej: "ConnectionStrings:cadena"), buscar dentro de las carpetas autorizadas de la API Key
+            SecretEntry? resolvedCandidate = null;
+            int matchCount = 0;
+
+            foreach (var prefix in permissions.AllowedPrefixes)
+            {
+                var folder = prefix.TrimEnd('*').TrimEnd(':');
+                if (!string.IsNullOrWhiteSpace(folder))
+                {
+                    var scopedKey = $"{folder}:{key}";
+                    if (_secrets.TryGetValue(scopedKey, out var scopedSecret))
+                    {
+                        resolvedCandidate = scopedSecret;
+                        matchCount++;
+                    }
+                }
+            }
+
+            if (matchCount == 1)
+            {
+                return resolvedCandidate;
+            }
+
+            // C. Buscar dentro de AllowedSecrets individuales si alguno coincide con el sufijo :key
+            foreach (var allowed in permissions.AllowedSecrets)
+            {
+                if (allowed.EndsWith($":{key}", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (_secrets.TryGetValue(allowed, out var allowedSecret) && HasPermissionToSecret(keyEntry, allowedSecret))
+                    {
+                        return allowedSecret;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        // Modo Full Access o sin autenticación
+        if (_secrets.TryGetValue(key, out var exactSecret))
+        {
+            return exactSecret;
+        }
+
+        // Si no se encontró por FullKey, buscar por clave relativa única
+        var relativeMatches = _secrets.Values
+            .Where(s => s.Key.Equals(key, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (relativeMatches.Count == 1)
+        {
+            return relativeMatches[0];
+        }
+
+        return null;
+    }
+
+    private bool HasPermissionToSecret(ApiKeyEntry? keyEntry, SecretEntry secret)
+    {
+        if (!RequireAuthentication || keyEntry == null)
+            return true;
+
         var permissions = keyEntry.Permissions;
 
         if (permissions.Level == AccessLevel.Full)
             return true;
 
+        // 1. ¿Está explícitamente en AllowedSecrets por FullKey o Key?
         if (permissions.AllowedSecrets.Any(s =>
-            s.Equals(secretKey, StringComparison.OrdinalIgnoreCase) ||
-            s.EndsWith($":{secretKey}", StringComparison.OrdinalIgnoreCase)))
-            return true;
-
-        if (_secrets.TryGetValue(secretKey, out var matchedSecret) &&
-            permissions.AllowedSecrets.Any(s => s.Equals(matchedSecret.FullKey, StringComparison.OrdinalIgnoreCase)))
+            s.Equals(secret.FullKey, StringComparison.OrdinalIgnoreCase) ||
+            (string.IsNullOrWhiteSpace(secret.Folder) && s.Equals(secret.Key, StringComparison.OrdinalIgnoreCase))))
         {
             return true;
         }
 
-        // Verificar prefijos permitidos (ej: "PortalClientes:*" permite "PortalClientes:ConnectionStrings:cadena")
+        // 2. Si el secreto está en la raíz (Folder es nulo o vacío):
+        // NO pertenece a ninguna carpeta. Solo se permite si estaba explícitamente en AllowedSecrets (evaluado arriba).
+        if (string.IsNullOrWhiteSpace(secret.Folder))
+            return false;
+
+        // 3. ¿Coincide con alguno de los prefijos de carpeta permitidos?
         foreach (var prefix in permissions.AllowedPrefixes)
         {
-            var prefixPattern = prefix.TrimEnd('*');
-            if (secretKey.StartsWith(prefixPattern, StringComparison.OrdinalIgnoreCase))
-                return true;
+            var folderPrefix = prefix.TrimEnd('*').TrimEnd(':');
+            if (string.IsNullOrWhiteSpace(folderPrefix))
+                continue;
 
-            // Si se busca por clave relativa, verificar si existe en la carpeta del prefijo
-            if (_secrets.TryGetValue(secretKey, out var entry) && !string.IsNullOrWhiteSpace(entry.Folder))
+            if (secret.Folder.Equals(folderPrefix, StringComparison.OrdinalIgnoreCase) ||
+                secret.Folder.StartsWith($"{folderPrefix}:", StringComparison.OrdinalIgnoreCase) ||
+                secret.Folder.StartsWith($"{folderPrefix}/", StringComparison.OrdinalIgnoreCase))
             {
-                var folderPrefix = prefixPattern.TrimEnd(':');
-                if (entry.Folder.Equals(folderPrefix, StringComparison.OrdinalIgnoreCase) ||
-                    entry.Folder.StartsWith(folderPrefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
+                return true;
             }
         }
 
         return false;
+    }
+
+    private bool HasPermissionToAccess(ApiKeyEntry keyEntry, string secretKey)
+    {
+        return FindAuthorizedSecret(secretKey, keyEntry) != null;
     }
 
     private bool CanListSecrets(ApiKeyEntry keyEntry)
@@ -441,8 +535,10 @@ public sealed class EmbeddedSecretServer : IDisposable
         }
         else
         {
-            // Filtrar solo los secretos permitidos
-            keys = _secrets.Keys.Where(k => HasPermissionToAccess(keyEntry, k));
+            // Filtrar solo los secretos a los que la API Key tiene permiso
+            keys = _secrets.Values
+                .Where(s => HasPermissionToSecret(keyEntry, s))
+                .Select(s => s.FullKey);
         }
 
         // Aplicar filtro adicional si se especificó
@@ -462,19 +558,21 @@ public sealed class EmbeddedSecretServer : IDisposable
         switch (command)
         {
             case "GET" when parts.Length >= 2:
-                var getResponse = HandleGet(parts[1]);
-                LogAudit("Anonymous", "N/A", "GET", parts[1], getResponse.StartsWith("OK"), null);
-                return getResponse;
+                var secretToGet = FindAuthorizedSecret(parts[1], null);
+                if (secretToGet != null)
+                {
+                    LogAudit("Anonymous", "N/A", "GET", secretToGet.FullKey, true, null);
+                    return $"OK|{secretToGet.Value}|{secretToGet.Description ?? ""}";
+                }
+                LogAudit("Anonymous", "N/A", "GET", parts[1], false, "Secret not found");
+                return "NOTFOUND";
 
             case "EXISTS" when parts.Length >= 2:
-                var existsResponse = HandleExists(parts[1]);
+                var exists = FindAuthorizedSecret(parts[1], null) != null;
                 LogAudit("Anonymous", "N/A", "EXISTS", parts[1], true, null);
-                return existsResponse;
+                return exists ? "TRUE" : "FALSE";
 
             case "LIST":
-                LogAudit("Anonymous", "N/A", "LIST", null, true, null);
-                return HandleList(parts.Length > 1 ? parts[1] : null);
-
             case "KEYS":
                 LogAudit("Anonymous", "N/A", "LIST", null, true, null);
                 return HandleList(parts.Length > 1 ? parts[1] : null);
@@ -512,18 +610,10 @@ public sealed class EmbeddedSecretServer : IDisposable
 
     private string HandleGet(string key)
     {
-        if (_secrets.TryGetValue(key, out var secret))
+        var secret = FindAuthorizedSecret(key, null);
+        if (secret != null)
         {
             return $"OK|{secret.Value}|{secret.Description ?? ""}";
-        }
-
-        var match = _secrets.Values.FirstOrDefault(s =>
-            s.Key.Equals(key, StringComparison.OrdinalIgnoreCase) ||
-            s.FullKey.Equals(key, StringComparison.OrdinalIgnoreCase));
-
-        if (match != null)
-        {
-            return $"OK|{match.Value}|{match.Description ?? ""}";
         }
 
         return "NOTFOUND";
@@ -531,7 +621,7 @@ public sealed class EmbeddedSecretServer : IDisposable
 
     private string HandleExists(string key)
     {
-        return _secrets.ContainsKey(key) ? "TRUE" : "FALSE";
+        return FindAuthorizedSecret(key, null) != null ? "TRUE" : "FALSE";
     }
 
     private string HandleList(string? filter)

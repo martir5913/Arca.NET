@@ -52,7 +52,8 @@ string jwtKey  = await client.GetSecretValueAsync("PortalWeb:JwtSettings:SecretK
 ### 2. Formato Corto / Relativo
 Estructura: `NombreSecreto` (sin el prefijo de la carpeta)
 ```csharp
-// Válido cuando la API Key tiene permisos sobre la carpeta del secreto:
+// Válido cuando la API Key está restringida a la carpeta correspondiente.
+// Arca resuelve el secreto de forma segura dentro de su ámbito autorizado:
 string sqlConn = await client.GetSecretValueAsync("ConnectionStrings:Sql");
 string jwtKey  = await client.GetSecretValueAsync("JwtSettings:SecretKey");
 ```
@@ -60,9 +61,14 @@ string jwtKey  = await client.GetSecretValueAsync("JwtSettings:SecretKey");
 ### 3. Recuperación de Carpeta Completa
 Descarga todos los secretos de un proyecto en una sola llamada de memoria:
 ```csharp
+// stripFolderPrefix es true por defecto: devuelve las claves limpias sin el prefijo "PortalWeb:"
 Dictionary<string, string> secretos = await client.GetFolderSecretsAsync("PortalWeb");
 
-string sql = secretos["PortalWeb:ConnectionStrings:Sql"];
+string sql = secretos["ConnectionStrings:Sql"];
+
+// Si prefieres conservar el prefijo completo:
+// Dictionary<string, string> secretos = await client.GetFolderSecretsAsync("PortalWeb", stripFolderPrefix: false);
+// string sql = secretos["PortalWeb:ConnectionStrings:Sql"];
 ```
 
 ---

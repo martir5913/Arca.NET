@@ -3,7 +3,7 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace Arca.Daemon.Services;
 
-// gestión del estado del vault en memoria
+// gestiï¿½n del estado del vault en memoria
 public sealed class VaultStateService
 {
     private readonly object _lock = new();
@@ -79,6 +79,7 @@ public sealed class VaultStateService
         lock (_lock)
         {
             return _secrets.FirstOrDefault(s =>
+                s.FullKey.Equals(key, StringComparison.OrdinalIgnoreCase) ||
                 s.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
         }
     }
@@ -93,6 +94,7 @@ public sealed class VaultStateService
             foreach (var key in keys)
             {
                 var secret = _secrets.FirstOrDefault(s =>
+                    s.FullKey.Equals(key, StringComparison.OrdinalIgnoreCase) ||
                     s.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
 
                 if (secret is not null)
@@ -111,12 +113,13 @@ public sealed class VaultStateService
         {
             if (string.IsNullOrWhiteSpace(filter))
             {
-                return _secrets.Select(s => s.Key).ToList();
+                return _secrets.Select(s => s.FullKey).ToList();
             }
 
             return _secrets
-                .Where(s => s.Key.Contains(filter, StringComparison.OrdinalIgnoreCase))
-                .Select(s => s.Key)
+                .Where(s => s.FullKey.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+                            s.Key.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                .Select(s => s.FullKey)
                 .ToList();
         }
     }
@@ -126,6 +129,7 @@ public sealed class VaultStateService
         lock (_lock)
         {
             return _secrets.Any(s =>
+                s.FullKey.Equals(key, StringComparison.OrdinalIgnoreCase) ||
                 s.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
         }
     }
